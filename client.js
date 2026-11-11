@@ -27,21 +27,38 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       subtitle: '连接 Gmail、Slack、GitHub、Notion 等 1,000+ 应用，让 DSH 直接替你操作这些平台。',
       dashboard: 'Dashboard',
       keyTitle: '接入你的 Composio 项目',
-      keyBody: 'Composio 托管 OAuth 授权与 Token 刷新。你只需要一个 Project API Key，不必自己注册每个平台的应用。',
+      keyBody: '先通过 OAuth 登录 Composio，或手动填写 Project API Key。Composio 托管各平台的 OAuth 授权与 Token 刷新，不必自己注册每个应用。',
       step1Title: '打开 Composio Dashboard',
       step1Body: '注册或登录，创建一个项目。',
       step2Title: '复制 Project API Key',
-      step2Body: '进入 Settings → API Keys，创建并复制密钥。',
+      step2Body: '进入 Settings → Project Settings → API Keys，创建并复制密钥。',
       step3Title: '粘贴并验证',
       step3Body: '保存时会调用一次 Composio 校验密钥。',
       openDashboard: '打开 Dashboard',
-      keyPlaceholder: '粘贴 Project API Key',
+      keyPlaceholder: '粘贴 Project API Key（ak_...）或 User API Key（uak_...）',
       saveVerify: '保存并验证',
       verifying: '验证中…',
       keyPrivacy: '密钥只写入本机 DSH 凭据存储，不会写入配置文件，也不会发送到 Composio 以外的服务。',
-      keyConfigured: 'API Key 已配置',
+      keyConfigured: 'Composio 已连接',
       keySourceStore: '本机凭据存储',
+      keySourceOAuth: 'OAuth 登录',
+      keySourceManual: '手动填写',
       keySourceEnv: '环境变量 COMPOSIO_API_KEY',
+      keyTypeUser: 'User API Key',
+      keyTypeProject: 'Project API Key',
+      keyTypeUnknown: 'API Key',
+      oauthTitle: '通过 OAuth 登录（推荐）',
+      oauthBody: '在浏览器中登录 Composio，自动写入 User API Key，无需复制密钥。',
+      oauthButton: 'OAuth 登录',
+      oauthWaiting: '等待授权中…',
+      oauthHint: '完成登录后会自动返回，最多等待 3 分钟。',
+      oauthSuccess: 'OAuth 登录成功，已连接 Composio。',
+      oauthFailed: 'OAuth 登录未完成，请重试。',
+      oauthPopupBlocked: '浏览器拦截了登录窗口，请点击下方“打开登录页面”继续。',
+      oauthOpenLink: '打开登录页面',
+      oauthCancel: '取消登录',
+      oauthConfigHint: 'OAuth 登录使用 Composio 账号，不需要手动复制 API Key。',
+      orManual: '或手动填写 API Key',
       keyEnvLocked: '由环境变量提供，请在启动环境中修改或移除。',
       change: '更换',
       clear: '清除',
@@ -51,7 +68,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       keySaved: 'API Key 已验证并保存',
       keyCleared: '已清除本机保存的 API Key',
       keyRequired: '请先填写 API Key',
-      keyInvalid: 'API Key 无效或已过期，请到 Composio Dashboard 重新复制。',
+      keyInvalid: 'Key 无效或类型不匹配。可改用 OAuth 登录，或确认使用的是 Project API Key（ak_...）/ User API Key（uak_...）。',
       cannotReach: '无法连接 Composio，请检查网络或 API 地址。',
       timedOut: '连接 Composio 超时，请稍后重试。',
       rateLimited: '请求过于频繁，请稍后再试。',
@@ -117,21 +134,38 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       subtitle: 'Connect Gmail, Slack, GitHub, Notion and 1,000+ apps, and let DSH work across them for you.',
       dashboard: 'Dashboard',
       keyTitle: 'Connect your Composio project',
-      keyBody: 'Composio hosts OAuth and token refresh. All you need is a Project API Key; there is no app registration for each service.',
+      keyBody: 'Sign in with OAuth, or paste a Project API Key. Composio hosts each app’s OAuth and token refresh, so you never register an app yourself.',
       step1Title: 'Open the Composio Dashboard',
       step1Body: 'Sign up or sign in and create a project.',
       step2Title: 'Copy the Project API Key',
-      step2Body: 'Go to Settings → API Keys, create a key and copy it.',
+      step2Body: 'Go to Settings → Project Settings → API Keys, create a key and copy it.',
       step3Title: 'Paste and verify',
       step3Body: 'Saving calls Composio once to validate the key.',
       openDashboard: 'Open Dashboard',
-      keyPlaceholder: 'Paste your Project API Key',
+      keyPlaceholder: 'Paste a Project API Key (ak_...) or User API Key (uak_...)',
       saveVerify: 'Save and verify',
       verifying: 'Verifying…',
       keyPrivacy: 'The key is stored only in the local DSH credential store. It is never written to configuration files or sent anywhere except Composio.',
-      keyConfigured: 'API key configured',
+      keyConfigured: 'Composio connected',
       keySourceStore: 'Local credential store',
+      keySourceOAuth: 'OAuth login',
+      keySourceManual: 'Entered manually',
       keySourceEnv: 'COMPOSIO_API_KEY environment variable',
+      keyTypeUser: 'User API Key',
+      keyTypeProject: 'Project API Key',
+      keyTypeUnknown: 'API Key',
+      oauthTitle: 'Sign in with OAuth (recommended)',
+      oauthBody: 'Sign in to Composio in your browser and the User API Key is saved automatically. No copying required.',
+      oauthButton: 'Sign in with OAuth',
+      oauthWaiting: 'Waiting for authorization…',
+      oauthHint: 'This returns automatically after login; it waits up to 3 minutes.',
+      oauthSuccess: 'Signed in with OAuth. Composio is connected.',
+      oauthFailed: 'OAuth login did not finish. Please try again.',
+      oauthPopupBlocked: 'The browser blocked the login window. Use “Open the login page” below to continue.',
+      oauthOpenLink: 'Open the login page',
+      oauthCancel: 'Cancel login',
+      oauthConfigHint: 'OAuth uses your Composio account; there is no API key to copy.',
+      orManual: 'Or paste an API key manually',
       keyEnvLocked: 'Provided by the environment. Change or remove it in the launch environment.',
       change: 'Replace',
       clear: 'Clear',
@@ -141,7 +175,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       keySaved: 'API key verified and saved',
       keyCleared: 'The locally saved API key was cleared',
       keyRequired: 'Enter an API key first',
-      keyInvalid: 'The API key is invalid or expired. Copy a new one from the Composio Dashboard.',
+      keyInvalid: 'The key is invalid or the type does not match. Use OAuth, or a Project API Key (ak_...) / User API Key (uak_...).',
       cannotReach: 'Could not reach Composio. Check the network or API URL.',
       timedOut: 'The Composio request timed out. Try again shortly.',
       rateLimited: 'Too many requests. Try again in a moment.',
@@ -283,6 +317,11 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       connect_failed: 'connectFailed',
       link_failed: 'connectFailed',
       auth_config_failed: 'connectFailed',
+      login_expired: 'oauthFailed',
+      login_not_found: 'oauthFailed',
+      login_cancelled: 'oauthFailed',
+      login_failed: 'oauthFailed',
+      invalid_login_session: 'oauthFailed',
     };
     if (map[code]) return t(lang, map[code]);
     return (error && error.message) || t(lang, 'unknownError');
@@ -461,6 +500,10 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     const [saving, setSaving] = useState(false);
     const [editing, setEditing] = useState(!status.configured);
     const [confirmClear, setConfirmClear] = useState(false);
+    const [oauthBusy, setOauthBusy] = useState(false);
+    const [oauthUrl, setOauthUrl] = useState('');
+    const oauthRun = useRef(0);
+    const popupRef = useRef(null);
 
     useEffect(() => {
       if (!status.configured) setEditing(true);
@@ -472,10 +515,83 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       return () => clearTimeout(timer);
     }, [confirmClear]);
 
+    useEffect(() => () => {
+      oauthRun.current += 1;
+    }, []);
+
+    const stopOAuth = useCallback((cancelRemote) => {
+      oauthRun.current += 1;
+      setOauthBusy(false);
+      setOauthUrl('');
+      try {
+        if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
+      } catch {
+        /* The window may already be gone. */
+      }
+      popupRef.current = null;
+      if (cancelRemote) void api('cancelLogin').catch(() => {});
+    }, []);
+
+    const startOAuth = async () => {
+      // Open synchronously so the browser counts it as a user gesture.
+      let popup = null;
+      try {
+        popup = window.open('', 'composio-oauth', 'popup=yes,width=560,height=760');
+      } catch {
+        popup = null;
+      }
+      if (!popup) onNotice({ kind: 'warn', text: t(lang, 'oauthPopupBlocked') });
+      popupRef.current = popup;
+      const run = oauthRun.current + 1;
+      oauthRun.current = run;
+      setOauthBusy(true);
+      setOauthUrl('');
+
+      try {
+        const session = await api('startLogin');
+        if (run !== oauthRun.current) return;
+        setOauthUrl(session.loginUrl);
+        try {
+          if (popup) popup.location.href = session.loginUrl;
+        } catch {
+          /* The popup may already be navigating; the link stays available. */
+        }
+
+        const deadline = Date.now() + AUTH_TIMEOUT_MS;
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+          if (run !== oauthRun.current) return;
+          const value = await api('pollLogin', { sessionId: session.sessionId });
+          if (run !== oauthRun.current) return;
+          if (value && value.configured) {
+            setOauthBusy(false);
+            setOauthUrl('');
+            try { if (popup) popup.close(); } catch { /* already closed */ }
+            popupRef.current = null;
+            setDraft('');
+            setEditing(false);
+            onSaved(value);
+            onNotice({ kind: 'success', text: t(lang, 'oauthSuccess') });
+            return;
+          }
+        }
+        if (run !== oauthRun.current) return;
+        setOauthBusy(false);
+        onNotice({ kind: 'warn', text: t(lang, 'authTimeout') });
+      } catch (error) {
+        if (run !== oauthRun.current) return;
+        setOauthBusy(false);
+        setOauthUrl('');
+        try { if (popup) popup.close(); } catch { /* already closed */ }
+        popupRef.current = null;
+        onNotice({ kind: 'error', text: errorText(lang, error) });
+      }
+    };
+
     const save = async () => {
       const key = draft.trim();
       if (!key) {
-        onNotice({ kind: 'error', text: t(UI_LANG, 'keyRequired') });
+        onNotice({ kind: 'error', text: t(lang, 'keyRequired') });
         return;
       }
       setSaving(true);
@@ -484,9 +600,9 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         onSaved(value);
         setDraft('');
         setEditing(false);
-        onNotice({ kind: 'success', text: t(UI_LANG, 'keySaved') });
+        onNotice({ kind: 'success', text: t(lang, 'keySaved') });
       } catch (error) {
-        onNotice({ kind: 'error', text: errorText(UI_LANG, error) });
+        onNotice({ kind: 'error', text: errorText(lang, error) });
       } finally {
         setSaving(false);
       }
@@ -497,40 +613,82 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         setConfirmClear(true);
         return;
       }
+      stopOAuth(false);
       setSaving(true);
       try {
         const value = await api('clearKey');
         onSaved(value);
         setConfirmClear(false);
         setEditing(true);
-        onNotice({ kind: 'success', text: t(UI_LANG, 'keyCleared') });
+        onNotice({ kind: 'success', text: t(lang, 'keyCleared') });
       } catch (error) {
-        onNotice({ kind: 'error', text: errorText(UI_LANG, error) });
+        onNotice({ kind: 'error', text: errorText(lang, error) });
       } finally {
         setSaving(false);
       }
     };
 
-    const sourceText = t(lang, status.source === 'env' ? 'keySourceEnv' : 'keySourceStore');
+    const sourceKey = status.source === 'env'
+      ? 'keySourceEnv'
+      : status.loginMethod === 'oauth'
+        ? 'keySourceOAuth'
+        : 'keySourceManual';
+    const typeKey = status.keyType === 'user'
+      ? 'keyTypeUser'
+      : status.keyType === 'project'
+        ? 'keyTypeProject'
+        : 'keyTypeUnknown';
+    const sourceText = t(lang, sourceKey);
+    const typeText = status.keyType ? ' · ' + t(lang, typeKey) : '';
 
     if (status.configured && !editing) {
       return h('section', { className: 'cmp-keycard cmp-keycard-compact' },
         h('span', { className: 'cmp-dot cmp-dot-on' }),
         h('div', { className: 'cmp-keycard-summary' },
           h('div', { className: 'cmp-keycard-name' }, t(lang, 'keyConfigured')),
-          h('div', { className: 'cmp-fine' }, sourceText)),
+          h('div', { className: 'cmp-fine' }, sourceText + typeText)),
         h('button', {
           className: 'cmp-btn cmp-btn-ghost',
           type: 'button',
+          disabled: oauthBusy,
           onClick: () => { setConfirmClear(false); setEditing(true); },
         }, t(lang, 'change')),
         status.source !== 'env' ? h('button', {
           className: 'cmp-btn cmp-btn-ghost cmp-btn-danger',
           type: 'button',
-          disabled: saving,
+          disabled: saving || oauthBusy,
           onClick: clear,
         }, confirmClear ? t(lang, 'clearConfirm') : t(lang, 'clear')) : null);
     }
+
+    const oauthBlock = (!status.configured || editing) ? h('div', { className: 'cmp-oauth' },
+      h('div', { className: 'cmp-oauth-head' },
+        h('span', { className: 'cmp-oauth-mark' }, h(Icon, { name: 'link', size: 16 })),
+        h('div', { className: 'cmp-oauth-copy' },
+          h('div', { className: 'cmp-oauth-title' }, t(lang, 'oauthTitle')),
+          h('p', { className: 'cmp-oauth-body' }, t(lang, 'oauthBody')),
+          h('p', { className: 'cmp-fine' }, t(lang, 'oauthConfigHint')))),
+      h('div', { className: 'cmp-oauth-actions' },
+        h('button', {
+          className: 'cmp-btn cmp-btn-primary',
+          type: 'button',
+          disabled: oauthBusy,
+          onClick: startOAuth,
+        }, oauthBusy ? h('span', { className: 'cmp-spin' }) : h(Icon, { name: 'link', size: 14 }),
+        oauthBusy ? t(lang, 'oauthWaiting') : t(lang, 'oauthButton')),
+        oauthBusy ? h('button', {
+          className: 'cmp-btn cmp-btn-ghost',
+          type: 'button',
+          onClick: () => stopOAuth(true),
+        }, t(lang, 'oauthCancel')) : null),
+      oauthBusy ? h('div', { className: 'cmp-fine cmp-oauth-wait' }, t(lang, 'oauthHint')) : null,
+      oauthUrl ? h('a', {
+        className: 'cmp-textlink',
+        href: oauthUrl,
+        target: '_blank',
+        rel: 'noreferrer',
+      }, t(lang, 'oauthOpenLink'), ' ', h(Icon, { name: 'external', size: 12 })) : null
+    ) : null;
 
     return h('section', { className: 'cmp-keycard' },
       status.configured
@@ -538,25 +696,15 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
           h('span', { className: 'cmp-dot cmp-dot-on' }),
           h('div', { className: 'cmp-keycard-summary' },
             h('h2', { className: 'cmp-keycard-title' }, t(lang, 'keyConfigured')),
-            h('div', { className: 'cmp-fine' }, sourceText)))
+            h('div', { className: 'cmp-fine' }, sourceText + typeText)))
         : h('div', { className: 'cmp-keycard-head' },
           h('div', { className: 'cmp-keycard-mark' }, h(Icon, { name: 'link', size: 20 })),
           h('div', { className: 'cmp-keycard-intro' },
             h('h2', { className: 'cmp-keycard-title' }, t(lang, 'keyTitle')),
             h('p', { className: 'cmp-keycard-desc' }, t(lang, 'keyBody')))),
-      !status.configured ? h('div', { className: 'cmp-steps' },
-        h('div', { className: 'cmp-step' },
-          h('span', { className: 'cmp-step-n' }, '1'),
-          h('div', null, h('div', { className: 'cmp-step-t' }, t(lang, 'step1Title')), h('div', { className: 'cmp-step-b' }, t(lang, 'step1Body')))),
-        h('div', { className: 'cmp-step' },
-          h('span', { className: 'cmp-step-n' }, '2'),
-          h('div', null, h('div', { className: 'cmp-step-t' }, t(lang, 'step2Title')), h('div', { className: 'cmp-step-b' }, t(lang, 'step2Body')))),
-        h('div', { className: 'cmp-step' },
-          h('span', { className: 'cmp-step-n' }, '3'),
-          h('div', null, h('div', { className: 'cmp-step-t' }, t(lang, 'step3Title')), h('div', { className: 'cmp-step-b' }, t(lang, 'step3Body'))))) : null,
-      status.configured && status.source === 'env'
-        ? h('p', { className: 'cmp-fine cmp-fine-block' }, t(lang, 'keyEnvLocked'))
-        : null,
+      oauthBlock,
+      (!status.configured || editing) ? h('div', { className: 'cmp-divider' },
+        h('span', null, t(lang, 'orManual'))) : null,
       h('div', { className: 'cmp-keyrow' },
         h('input', {
           className: 'cmp-input',
@@ -574,12 +722,25 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
           disabled: saving || !draft.trim(),
           onClick: save,
         }, saving ? h('span', { className: 'cmp-spin' }) : null, saving ? t(lang, 'verifying') : t(lang, 'saveVerify'))),
+      !status.configured ? h('div', { className: 'cmp-steps' },
+        h('div', { className: 'cmp-step' },
+          h('span', { className: 'cmp-step-n' }, '1'),
+          h('div', null, h('div', { className: 'cmp-step-t' }, t(lang, 'step1Title')), h('div', { className: 'cmp-step-b' }, t(lang, 'step1Body')))),
+        h('div', { className: 'cmp-step' },
+          h('span', { className: 'cmp-step-n' }, '2'),
+          h('div', null, h('div', { className: 'cmp-step-t' }, t(lang, 'step2Title')), h('div', { className: 'cmp-step-b' }, t(lang, 'step2Body')))),
+        h('div', { className: 'cmp-step' },
+          h('span', { className: 'cmp-step-n' }, '3'),
+          h('div', null, h('div', { className: 'cmp-step-t' }, t(lang, 'step3Title')), h('div', { className: 'cmp-step-b' }, t(lang, 'step3Body'))))) : null,
+      status.configured && status.source === 'env'
+        ? h('p', { className: 'cmp-fine cmp-fine-block' }, t(lang, 'keyEnvLocked'))
+        : null,
       h('div', { className: 'cmp-keycard-foot' },
         status.configured ? h('button', {
           className: 'cmp-btn cmp-btn-ghost',
           type: 'button',
-          disabled: saving,
-          onClick: () => { setDraft(''); setEditing(false); },
+          disabled: saving || oauthBusy,
+          onClick: () => { stopOAuth(false); setDraft(''); setEditing(false); },
         }, t(lang, 'cancel')) : h('a', {
           className: 'cmp-textlink',
           href: 'https://dashboard.composio.dev',
@@ -589,7 +750,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         status.configured && status.source !== 'env' ? h('button', {
           className: 'cmp-btn cmp-btn-ghost cmp-btn-danger',
           type: 'button',
-          disabled: saving,
+          disabled: saving || oauthBusy,
           onClick: clear,
         }, confirmClear ? t(lang, 'clearConfirm') : t(lang, 'clear')) : null),
       h('p', { className: 'cmp-fine cmp-fine-block' },
@@ -1193,6 +1354,16 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     '.cmp-keycard-name{font-size:13px;font-weight:600}',
     '.cmp-dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block;background:var(--dsw-alias-state-idle-primary)}',
     '.cmp-dot-on{background:var(--dsw-alias-state-success-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--dsw-alias-state-success-primary) 14%,transparent)}',
+    '.cmp-oauth{margin:14px 0 0;padding:12px 13px;border:1px solid color-mix(in srgb,var(--cmp-accent) 28%,transparent);border-radius:11px;background:color-mix(in srgb,var(--cmp-accent) 7%,transparent)}',
+    '.cmp-oauth-head{display:flex;align-items:flex-start;gap:10px}',
+    '.cmp-oauth-mark{width:28px;height:28px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--cmp-accent) 16%,transparent);color:var(--cmp-accent)}',
+    '.cmp-oauth-copy{min-width:0}',
+    '.cmp-oauth-title{font-size:13px;font-weight:650;line-height:1.4}',
+    '.cmp-oauth-body{margin:3px 0 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.55}',
+    '.cmp-oauth-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px}',
+    '.cmp-oauth-wait{margin:9px 0 0}',
+    '.cmp-divider{display:flex;align-items:center;gap:10px;margin:16px 0 10px;color:var(--dsw-alias-label-secondary);font-size:11.5px;white-space:nowrap}',
+    '.cmp-divider::before,.cmp-divider::after{content:"";height:1px;flex:1;background:var(--dsw-alias-border-l1)}',
     '.cmp-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0 14px}',
     '.cmp-step{display:flex;gap:8px;padding:10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-bg-base) 45%,transparent)}',
     '.cmp-step-n{width:18px;height:18px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;background:rgba(99,102,241,.16);color:#6366f1}',

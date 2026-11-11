@@ -6,7 +6,7 @@
 
 The plugin has two halves:
 
-1. **Visual onboarding** — Settings → Composio: paste a Project API Key, search toolkits, click one to run OAuth, inspect or disconnect existing accounts.
+1. **Visual onboarding** — Settings → Composio: sign in with OAuth (recommended) or paste a Project / User API Key, search toolkits, click one to run OAuth, inspect or disconnect existing accounts.
 2. **Agent tools** — five Composio meta-tools registered with DSH: search tools, read a tool schema, execute a tool, list connections, start a connection. The agent can read and write Gmail, Slack, GitHub and more from chat.
 
 It does **not** flood the model with 1,000+ platform tools. Like Composio's official MCP, it uses a meta-tool pattern: search first, load only the schema you need, then execute.
@@ -15,7 +15,8 @@ It does **not** flood the model with 1,000+ platform tools. Like Composio's offi
 
 | Feature | Description |
 |---|---|
-| API key setup | Key is verified against Composio before being stored in DSH credentials; `COMPOSIO_API_KEY` can be used as a read-only fallback |
+| OAuth login (recommended) | Sign in to Composio in the browser; the User API Key is obtained and stored automatically, and the page polls until login completes |
+| API key setup | Supports Project API Keys (`ak_...`) and User API Keys (`uak_...`) with automatic `x-api-key` / `x-user-api-key` selection. A key is verified against Composio before storage; `COMPOSIO_API_KEY` is a read-only fallback |
 | Toolkit catalog | Sorted by usage, keyword search, pagination, categories, tool counts, logos, connection state |
 | One-click OAuth | Click a toolkit → find/create a Composio-managed auth config → open the authorization page → poll status |
 | Connection management | List connected accounts for the current user; two-step disconnect |
@@ -56,12 +57,27 @@ Then make sure the profile `package.json` contains:
 
 ## Setup
 
-1. Open [dashboard.composio.dev](https://dashboard.composio.dev), sign in, and create a project.
-2. Go to **Settings → API Keys**, create a **Project API Key**, and copy it.
-3. In DSH open **Settings → Composio**, paste the key, and click **Save and verify**. The key is probed with `GET /api/v3.1/toolkits?limit=1` and is not stored when invalid.
-4. Search for a toolkit and click its card. Existing active connections are detected; no-auth toolkits connect immediately; otherwise the browser opens Composio's OAuth page and the UI polls until the connection becomes active.
+### A. OAuth login (recommended)
 
-The key is stored in DSH credentials under `dsh-composio/api-key`; it never goes into `cordis.patch.yml`. Advanced settings let you change `user_id` (default `dsh-user`) and the API base URL.
+Open **Settings → Composio** and click **Sign in with OAuth**. The plugin creates a Composio login session and opens the Dashboard in your browser. After you sign in, the plugin receives a **User API Key** (`uak_...`) and stores it in DSH credentials.
+
+- No key copying;
+- the login session lasts about 13 minutes and the page polls for up to 3 minutes;
+- if the browser blocks the popup, use the **Open the login page** link shown in the card.
+
+### B. Project API Key
+
+1. Open [dashboard.composio.dev](https://dashboard.composio.dev), sign in, and create a project.
+2. Go to **Settings → Project Settings → API Keys**, create a **Project API Key**, and copy it.
+3. In DSH open **Settings → Composio**, paste the key, and click **Save and verify**. The key is probed with `GET /api/v3.1/toolkits?limit=1` and is not stored when invalid.
+
+> **Key types**: the plugin supports Project API Keys (`ak_...`, sent as `x-api-key`) and User API Keys (`uak_...`, sent as `x-user-api-key`). Organization API Keys (`x-org-api-key`) are not supported; use OAuth instead. A consumer key generated for MCP / AI Clients is also rejected by Composio; use OAuth.
+
+### Connect a toolkit
+
+Search for a toolkit and click its card. Existing active connections are detected; no-auth toolkits connect immediately; otherwise the browser opens Composio's OAuth page and the UI polls until the connection becomes active.
+
+OAuth stores the returned key automatically; a manually entered key is verified before storage. The key lives in DSH credentials under `dsh-composio/api-key` and never goes into `cordis.patch.yml`. The summary shows the source (OAuth login / entered manually / environment) and key type (Project / User). Advanced settings let you change `user_id` (default `dsh-user`) and the API base URL.
 
 ## Agent tools
 
@@ -93,6 +109,7 @@ Write operations (send email, post message, create issue, …) affect the real p
 - Non-secret preferences (`user_id`, base URL) live in `~/.dsh/composio/settings.json`.
 - Composio hosts OAuth credentials and proxies API calls, so request/response data passes through Composio's cloud. Evaluate this before using sensitive data.
 - Tool output is untrusted external data; the agent must not treat instructions inside it as system instructions.
+- OAuth login only stores the User API Key returned by Composio; your Composio password is never handled by the plugin.
 
 ## Architecture
 
@@ -116,6 +133,7 @@ dsh-composio/
 
 - Composio's backend is a cloud service; full local self-hosting is not available (self-host/BYOC is an Enterprise capability). Only the client and key stay local.
 - Only Composio **managed OAuth** is automated. For platforms that need your own OAuth app, create the auth config in Composio first.
+- Organization API Keys (`x-org-api-key`) are not supported; use OAuth login for organization-level access.
 - No triggers, webhooks, or scheduled runs yet; tools are request/response only.
 - Tool output is truncated at 48,000 characters before being returned to the model.
 

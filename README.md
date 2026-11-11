@@ -6,7 +6,7 @@
 
 插件分两层：
 
-1. **图形化接入**：设置 → Composio，填写 Project API Key，搜索平台，点一下走 OAuth，查看/断开已有连接。
+1. **图形化接入**：设置 → Composio，用 OAuth 登录（推荐）或填写 Project / User API Key，搜索平台，点一下走 OAuth，查看/断开已有连接。
 2. **Agent 工具**：向 DSH 注册 5 个 Composio meta-tools（搜索工具、读取 schema、执行工具、查看连接、发起连接），agent 可以在对话里直接读写 Gmail、Slack、GitHub 等平台，无需你手动拼 API 请求。
 
 不使用「把 1,000+ 个平台工具全部注册给模型」的做法——那会占满上下文。插件采用与 Composio 官方 MCP 相同的 meta-tool 模式：先搜索、再读 schema、最后执行，模型只在需要时加载具体工具。
@@ -15,7 +15,8 @@
 
 | 能力 | 说明 |
 |---|---|
-| API Key 接入 | Key 先向 Composio 校验，通过后才写入 DSH 凭据存储；支持 `COMPOSIO_API_KEY` 环境变量回退 |
+| OAuth 登录（推荐） | 浏览器登录 Composio，自动获取并保存 User API Key，无需手动复制；页面会轮询到登录完成 |
+| API Key 接入 | 支持 Project API Key（`ak_...`）与 User API Key（`uak_...`），自动选择 `x-api-key` / `x-user-api-key`；校验通过才写入 DSH 凭据存储，并支持 `COMPOSIO_API_KEY` 环境变量回退 |
 | 平台目录 | 按使用量排序，关键词搜索、分页加载，展示分类、工具数量、Logo、连接状态 |
 | 一键 OAuth | 点击平台 → 查找/创建 Composio 托管授权配置 → 打开授权页 → 轮询连接状态 |
 | 连接管理 | 列出当前 user 的已连接账号，两步确认断开 |
@@ -56,20 +57,33 @@ pnpm add xiaokaizhou/dsh-composio
 
 ## 配置
 
-### 1. 获取 Composio Project API Key
+### 1. 选择接入方式
+
+#### 方式 A：OAuth 登录（推荐）
+
+打开 **设置 → Composio**，点「OAuth 登录」。插件会创建一个 Composio 登录会话，在浏览器里打开 Dashboard；完成登录后，插件自动取得 **User API Key**（`uak_...`）并写入 DSH 凭据存储。
+
+- 不需要手动复制 Key；
+- 登录会话约 13 分钟有效，页面最多轮询 3 分钟；
+- 如果浏览器拦截弹窗，页面会给出「打开登录页面」链接，继续完成即可。
+
+#### 方式 B：Project API Key
 
 1. 打开 [dashboard.composio.dev](https://dashboard.composio.dev)，注册或登录。
 2. 创建一个项目。
-3. 进入 **Settings → API Keys**，创建一个 **Project API Key** 并复制。
+3. 进入 **Settings → Project Settings → API Keys**，创建一个 **Project API Key** 并复制。
 4. 可选：用 scoped key 限制权限；本插件需要读取 toolkits / tools / connected accounts，并创建 auth config 与连接链接。
+
+> **Key 类型**：本插件支持 Project API Key（`ak_...`，走 `x-api-key`）和 User API Key（`uak_...`，走 `x-user-api-key`）。Organization API Key 需要 `x-org-api-key`，本插件暂不支持，请改用 OAuth 登录。若粘贴的是 Composio 为 MCP / AI Clients 生成的 consumer key，也会被 Composio 拒绝，请改用 OAuth。
 
 ### 2. 在 DSH 中保存 Key
 
-打开 **设置 → Composio**，粘贴 Key，点「保存并验证」。
+OAuth 登录会在授权完成后自动保存。手动方式：在 **设置 → Composio** 粘贴 Key，点「保存并验证」。
 
-- 保存前会调用一次 `GET /api/v3.1/toolkits?limit=1` 校验；无效 Key 不会落库。
+- 保存前会调用一次 `GET /api/v3.1/toolkits?limit=1` 校验；无效 Key 不会落库。401 会区分 Project / User Key 类型并给出对应提示。
 - Key 存在 DSH 凭据存储，record key 为 `dsh-composio/api-key`。
 - 如果 Key 来自 `COMPOSIO_API_KEY` 环境变量，页面会显示「环境变量」来源，并隐藏「清除」按钮。
+- 已保存的 Key 会显示来源（OAuth 登录 / 手动填写 / 环境变量）与类型（Project / User）。
 - 高级设置可改 `user_id`（默认 `dsh-user`）与 API Base URL（代理或 mock 服务）。
 
 ### 3. 连接平台
@@ -127,6 +141,7 @@ pnpm add xiaokaizhou/dsh-composio
 - 非密钥偏好（`user_id`、自定义 Base URL）保存在 `~/.dsh/composio/settings.json`。
 - Composio 托管 OAuth 凭证并代理 API 调用，调用参数与结果会经过 Composio 云端；对合规敏感的数据请先评估。
 - 工具返回内容属于外部不可信数据，agent 不应把其中的指令当作系统指令执行。
+- OAuth 登录只保存 Composio 返回的 User API Key；不会接触你的 Composio 账号密码。
 
 ## 架构
 
@@ -150,6 +165,7 @@ dsh-composio/
 
 - Composio 后端是云服务，不能在本机完整自托管；自托管/BYOC 属于 Composio Enterprise 能力。本插件只把客户端和密钥放在本地。
 - 目前只走 Composio **托管 OAuth**；需要自带 OAuth app（自有 client_id / scopes）的平台，请先在 Composio Dashboard 建好 auth config，再回来连接。
+- 不支持 Organization API Key（`x-org-api-key`）；需要组织级权限时请用 OAuth 登录。
 - 平台目录最多展示 Composio 当前项目可见的 toolkits；工具搜索结果受项目权限与平台可用性影响。
 - 没有实现 triggers / webhooks / 定时任务，只提供请求-响应式工具调用。
 - 执行结果会原样交给模型，超大输出会在 48,000 字符处截断。

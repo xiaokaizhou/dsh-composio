@@ -16,6 +16,7 @@ import path from 'node:path'
 const ROUTE = '/_dsh/composio/api'
 const API_PREFIX = '/api/v3.1'
 const DEFAULT_BASE_URL = 'https://backend.composio.dev'
+const DASHBOARD_URL = 'https://dashboard.composio.dev/'
 const DEFAULT_USER_ID = 'dsh-user'
 const CREDENTIAL_KEY = 'dsh-composio/api-key'
 const ENV_KEY = 'COMPOSIO_API_KEY'
@@ -54,6 +55,24 @@ function normalizeBaseUrl(value) {
 }
 
 let preferencesCache = null
+let pendingLogin = null
+
+function normalizePreferences(saved = {}) {
+  const loginMethod =
+    saved?.loginMethod === 'oauth' || saved?.loginMethod === 'manual'
+      ? saved.loginMethod
+      : ''
+  return {
+    userId:
+      typeof saved?.userId === 'string' && saved.userId.trim()
+        ? saved.userId.trim()
+        : DEFAULT_USER_ID,
+    baseUrl: normalizeBaseUrl(saved?.baseUrl),
+    loginMethod,
+    accountEmail:
+      typeof saved?.accountEmail === 'string' ? saved.accountEmail.trim() : '',
+  }
+}
 
 async function readPreferences() {
   if (preferencesCache) return preferencesCache
@@ -63,23 +82,19 @@ async function readPreferences() {
   } catch {
     saved = null
   }
-  preferencesCache = {
-    userId:
-      typeof saved?.userId === 'string' && saved.userId.trim()
-        ? saved.userId.trim()
-        : DEFAULT_USER_ID,
-    baseUrl: normalizeBaseUrl(saved?.baseUrl),
-  }
+  preferencesCache = normalizePreferences(saved)
   return preferencesCache
 }
 
 async function writePreferences(next) {
+  const normalized = normalizePreferences({ ...(preferencesCache || {}), ...next })
   const target = stateFile()
   await fs.mkdir(path.dirname(target), { recursive: true })
   const temp = `${target}.${process.pid}.tmp`
-  await fs.writeFile(temp, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
+  await fs.writeFile(temp, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8')
   await fs.rename(temp, target)
-  preferencesCache = next
+  preferencesCache = normalized
+  return normalized
 }
 
 /* ------------------------------------------------------------------ */
@@ -123,6 +138,19 @@ async function clearApiKey(ctx) {
 /* Composio client                                                     */
 /* ------------------------------------------------------------------ */
 
+function keyTypeOf(key) {
+  const value = typeof key === 'string' ? key.trim() : ''
+  if (/^uak_/i.test(value)) return 'user'
+  if (/^ak_/i.test(value)) return 'project'
+  return value ? 'unknown' : null
+}
+
+function authHeadersFor(key) {
+  return keyTypeOf(key) === 'user'
+    ? { 'x-user-api-key': key }
+    : { 'x-api-key': key }
+}
+
 async function composio(pathname, options = {}) {
   const {
     method = 'GET',
@@ -132,8 +160,10 @@ async function composio(pathname, options = {}) {
     timeoutMs = 20_000,
   } = options
   const url = `${normalizeBaseUrl(baseUrl)}${API_PREFIX}${pathname}`
-  const headers = { accept: 'application/json', 'x-api-key': apiKey }
+  const headers = { accept: 'application/json' }
+  if (apiKey) Object.assign(headers, authHeadersFor(apiKey))
   if (body !== undefined) headers['content-type'] = 'application/json'
+  const requestKeyType = keyTypeOf(apiKey)
 
   let response
   try {
@@ -174,6 +204,8 @@ async function composio(pathname, options = {}) {
     const error = new Error(detail)
     error.code = data?.error?.code || data?.code || 'composio_error'
     error.status = response.status
+    error.composioMessage = detail
+    if (requestKeyType) error.keyType = requestKeyType
     throw error
   }
 
@@ -235,6 +267,9 @@ async function actionStatus(ctx) {
   return {
     configured: Boolean(key.key),
     source: key.source,
+    keyType: key.key ? keyTypeOf(key.key) : null,
+    loginMethod: key.source === 'env' ? 'env' : key.key ? preferences.loginMethod || 'manual' : '',
+    accountEmail: preferences.accountEmail || '',
     userId: preferences.userId,
     baseUrl: preferences.baseUrl,
   }
@@ -262,6 +297,11 @@ async function actionSaveKey(ctx, payload) {
     baseUrl: preferences.baseUrl,
   })
   await saveApiKey(ctx, key)
+  await writePreferences({
+    ...(await readPreferences()),
+    loginMethod: 'manual',
+    accountEmail: '',
+  })
   return {
     ...(await actionStatus(ctx)),
     verified: true,
@@ -271,7 +311,126 @@ async function actionSaveKey(ctx, payload) {
 
 async function actionClearKey(ctx) {
   await clearApiKey(ctx)
+  await writePreferences({
+    ...(await readPreferences()),
+    loginMethod: '',
+    accountEmail: '',
+  })
   return actionStatus(ctx)
+}
+
+function requireLoginSessionId(value) {
+  const id = typeof value === 'string' ? value.trim() : ''
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    const error = new Error('OAuth 登录会话不合法')
+    error.code = 'invalid_login_session'
+    error.status = 400
+    throw error
+  }
+  return id
+}
+
+function loginExpired(message = 'OAuth 登录已过期，请重新发起登录') {
+  pendingLogin = null
+  const error = new Error(message)
+  error.code = 'login_expired'
+  error.status = 410
+  return error
+}
+
+async function actionStartLogin(ctx) {
+  const preferences = await readPreferences()
+  const session = await composio('/cli/create-session', {
+    method: 'POST',
+    body: { scope: 'user' },
+    baseUrl: preferences.baseUrl,
+  })
+  const sessionId = typeof session?.id === 'string' ? session.id.trim() : ''
+  if (!sessionId) {
+    const error = new Error('Composio 没有返回登录会话')
+    error.code = 'login_failed'
+    error.status = 502
+    throw error
+  }
+  pendingLogin = { id: sessionId, expiresAt: session?.expiresAt || '' }
+  return {
+    sessionId,
+    loginUrl: `${DASHBOARD_URL}?cliKey=${encodeURIComponent(sessionId)}`,
+    expiresAt: session?.expiresAt || '',
+  }
+}
+
+async function actionPollLogin(ctx, payload) {
+  const sessionId = requireLoginSessionId(payload?.sessionId)
+  if (!pendingLogin || pendingLogin.id !== sessionId) {
+    const error = new Error('登录会话已失效，请重新发起 OAuth 登录')
+    error.code = 'login_not_found'
+    error.status = 404
+    throw error
+  }
+
+  const preferences = await readPreferences()
+  let session
+  try {
+    session = await composio(`/cli/get-session?id=${encodeURIComponent(sessionId)}`, {
+      baseUrl: preferences.baseUrl,
+    })
+  } catch (cause) {
+    if (cause?.status === 401 || cause?.status === 403) {
+      pendingLogin = null
+      throw loginExpired('OAuth 登录会话已失效，请重新发起登录')
+    }
+    throw cause
+  }
+
+  if (!pendingLogin || pendingLogin.id !== sessionId) {
+    const error = new Error('登录已取消，请重新发起 OAuth 登录')
+    error.code = 'login_cancelled'
+    error.status = 409
+    throw error
+  }
+
+  const expiresAt = session?.expiresAt || pendingLogin.expiresAt
+  const expired = expiresAt && Date.parse(expiresAt) <= Date.now()
+  if (expired) throw loginExpired()
+
+  if (session?.status === 'linked') {
+    const apiKey = typeof session.api_key === 'string' ? session.api_key.trim() : ''
+    if (!apiKey) throw loginExpired('OAuth 登录已完成，但没有返回 API Key，请重新登录')
+
+    // The returned key is a User API key. Probe it before persisting so a
+    // project mismatch is reported here rather than on the next tool call.
+    const probe = await composio('/toolkits?limit=1', {
+      apiKey,
+      baseUrl: preferences.baseUrl,
+    })
+    await saveApiKey(ctx, apiKey)
+    const accountEmail =
+      typeof session?.account?.email === 'string' ? session.account.email.trim() : ''
+    await writePreferences({ ...preferences, loginMethod: 'oauth', accountEmail })
+    pendingLogin = null
+    return {
+      ...(await actionStatus(ctx)),
+      verified: true,
+      toolkitTotal: Number.isFinite(probe?.total_items) ? probe.total_items : null,
+      accountEmail,
+    }
+  }
+
+  if (session?.status && session.status !== 'pending') {
+    throw loginExpired(`OAuth 登录未完成（${session.status}），请重新发起登录`)
+  }
+
+  return {
+    status: 'pending',
+    sessionId,
+    expiresAt,
+  }
+}
+
+function actionCancelLogin() {
+  pendingLogin = null
+  return { cancelled: true }
 }
 
 async function actionSaveSettings(ctx, payload) {
@@ -930,6 +1089,12 @@ async function dispatch(ctx, action, payload) {
       return actionStatus(ctx)
     case 'saveKey':
       return actionSaveKey(ctx, payload)
+    case 'startLogin':
+      return actionStartLogin(ctx)
+    case 'pollLogin':
+      return actionPollLogin(ctx, payload)
+    case 'cancelLogin':
+      return actionCancelLogin()
     case 'clearKey':
       return actionClearKey(ctx)
     case 'saveSettings':
@@ -1031,7 +1196,22 @@ function errorPayload(cause) {
 
   if (status === 401 && code !== 'missing_key') {
     code = 'invalid_key'
-    message = 'Composio API Key 无效或已过期，请重新填写'
+    const keyType = cause?.keyType || 'unknown'
+    if (keyType === 'user') {
+      message =
+        'Composio 返回 401：User API Key 未被接受。请确认这个 key 属于当前项目，或改用 OAuth 登录 / Project API Key。'
+    } else if (keyType === 'project') {
+      message =
+        'Composio 返回 401：Project API Key 无效或已过期。请到 Dashboard 的 Settings → Project Settings → API Keys 重新复制，或改用 OAuth 登录。'
+    } else {
+      message =
+        'Composio 返回 401：Key 无效或类型不匹配。本插件支持 Project API Key（ak_...）和 User API Key（uak_...）；Organization API Key 请改用 OAuth 登录。'
+    }
+    details = {
+      ...(details || {}),
+      keyType,
+      composioMessage: cause?.composioMessage || cause?.message || '',
+    }
   } else if (status === 403) {
     message = `当前 API Key 没有权限：${message}`
   } else if (status === 429) {
