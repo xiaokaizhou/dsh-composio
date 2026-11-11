@@ -54,7 +54,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       oauthHint: '完成登录后会自动返回，最多等待 3 分钟。',
       oauthSuccess: 'OAuth 登录成功，已连接 Composio。',
       oauthFailed: 'OAuth 登录未完成，请重试。',
-      oauthPopupBlocked: '浏览器拦截了登录窗口，请点击下方“打开登录页面”继续。',
+      oauthOpenFailed: '无法自动打开系统浏览器，请点击下方“打开登录页面”继续。',
       oauthOpenLink: '打开登录页面',
       oauthCancel: '取消登录',
       oauthConfigHint: 'OAuth 登录使用 Composio 账号，不需要手动复制 API Key。',
@@ -113,10 +113,10 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       retry: '重试',
       toolsCount: '{n} 个工具',
       noKeyHint: '保存 API Key 后即可浏览全部平台。',
-      waitingAuth: '已打开授权页面，正在等待你完成登录…',
+      waitingAuth: '正在等待你完成授权…',
       cancelWait: '取消等待',
       authTimeout: '还没有检测到连接完成。完成授权后会显示在已连接列表里。',
-      authPopupBlocked: '浏览器拦截了授权窗口。点击下面的按钮继续。',
+      authPopupBlocked: '无法自动打开系统浏览器。点击下面的按钮继续。',
       openAuth: '打开授权页面',
       connectFailed: '无法创建授权链接，请稍后重试。',
       openAuthGuide: '查看认证配置指南',
@@ -161,7 +161,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       oauthHint: 'This returns automatically after login; it waits up to 3 minutes.',
       oauthSuccess: 'Signed in with OAuth. Composio is connected.',
       oauthFailed: 'OAuth login did not finish. Please try again.',
-      oauthPopupBlocked: 'The browser blocked the login window. Use “Open the login page” below to continue.',
+      oauthOpenFailed: 'Could not open the system browser automatically. Use “Open the login page” below to continue.',
       oauthOpenLink: 'Open the login page',
       oauthCancel: 'Cancel login',
       oauthConfigHint: 'OAuth uses your Composio account; there is no API key to copy.',
@@ -220,10 +220,10 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       retry: 'Retry',
       toolsCount: '{n} tools',
       noKeyHint: 'Save an API key to browse every toolkit.',
-      waitingAuth: 'The authorization page is open. Waiting for you to finish signing in…',
+      waitingAuth: 'Waiting for you to finish signing in…',
       cancelWait: 'Stop waiting',
       authTimeout: 'No completed connection was detected yet. It will appear in the connected list once authorization finishes.',
-      authPopupBlocked: 'The browser blocked the authorization window. Use the button below to continue.',
+      authPopupBlocked: 'Could not open the system browser automatically. Use the button below to continue.',
       openAuth: 'Open authorization page',
       connectFailed: 'Could not create an authorization link. Try again shortly.',
       openAuthGuide: 'See the auth setup guide',
@@ -503,7 +503,6 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     const [oauthBusy, setOauthBusy] = useState(false);
     const [oauthUrl, setOauthUrl] = useState('');
     const oauthRun = useRef(0);
-    const popupRef = useRef(null);
 
     useEffect(() => {
       if (!status.configured) setEditing(true);
@@ -523,25 +522,10 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       oauthRun.current += 1;
       setOauthBusy(false);
       setOauthUrl('');
-      try {
-        if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
-      } catch {
-        /* The window may already be gone. */
-      }
-      popupRef.current = null;
       if (cancelRemote) void api('cancelLogin').catch(() => {});
     }, []);
 
     const startOAuth = async () => {
-      // Open synchronously so the browser counts it as a user gesture.
-      let popup = null;
-      try {
-        popup = window.open('', 'composio-oauth', 'popup=yes,width=560,height=760');
-      } catch {
-        popup = null;
-      }
-      if (!popup) onNotice({ kind: 'warn', text: t(lang, 'oauthPopupBlocked') });
-      popupRef.current = popup;
       const run = oauthRun.current + 1;
       oauthRun.current = run;
       setOauthBusy(true);
@@ -551,10 +535,13 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         const session = await api('startLogin');
         if (run !== oauthRun.current) return;
         setOauthUrl(session.loginUrl);
+        // The host process opens the default system browser; this also works
+        // inside the desktop app, where window.open() does not reach it.
         try {
-          if (popup) popup.location.href = session.loginUrl;
+          await api('openExternal', { url: session.loginUrl });
         } catch {
-          /* The popup may already be navigating; the link stays available. */
+          if (run !== oauthRun.current) return;
+          onNotice({ kind: 'warn', text: t(lang, 'oauthOpenFailed') });
         }
 
         const deadline = Date.now() + AUTH_TIMEOUT_MS;
@@ -566,8 +553,6 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
           if (value && value.configured) {
             setOauthBusy(false);
             setOauthUrl('');
-            try { if (popup) popup.close(); } catch { /* already closed */ }
-            popupRef.current = null;
             setDraft('');
             setEditing(false);
             onSaved(value);
@@ -582,8 +567,6 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         if (run !== oauthRun.current) return;
         setOauthBusy(false);
         setOauthUrl('');
-        try { if (popup) popup.close(); } catch { /* already closed */ }
-        popupRef.current = null;
         onNotice({ kind: 'error', text: errorText(lang, error) });
       }
     };
@@ -889,7 +872,6 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     const requestSeq = useRef(0);
     const waitingRef = useRef(null);
     const pollRef = useRef(null);
-    const popupRef = useRef(null);
 
     const loadStatus = useCallback(async () => {
       setStatusError(null);
@@ -980,17 +962,11 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       }
     }, []);
 
-    const closePopup = useCallback(() => {
-      try { if (popupRef.current) popupRef.current.close(); } catch (e) { /* ignored */ }
-      popupRef.current = null;
-    }, []);
-
-    const finishAuth = useCallback((success) => {
+    const finishAuth = useCallback(() => {
       stopPolling();
       setWaiting(null);
       waitingRef.current = null;
-      if (success) closePopup();
-    }, [stopPolling, closePopup]);
+    }, [stopPolling]);
 
     const startPolling = useCallback((slug) => {
       stopPolling();
@@ -1003,15 +979,16 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
           setConnections(items);
           const hit = items.find((item) => item.slug === slug && item.status === 'ACTIVE');
           if (hit) {
-            finishAuth(true);
+            finishAuth();
+            setAuthFallback(null);
             setNotice({ kind: 'success', text: t(UI_LANG, 'connectedNow') });
           } else if (Date.now() - started > AUTH_TIMEOUT_MS) {
-            finishAuth(false);
+            finishAuth();
             setNotice({ kind: 'warn', text: t(UI_LANG, 'authTimeout') });
           }
         } catch (error) {
           if (Date.now() - started > AUTH_TIMEOUT_MS) {
-            finishAuth(false);
+            finishAuth();
             setNotice({ kind: 'error', text: errorText(UI_LANG, error) });
           }
         }
@@ -1035,28 +1012,14 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       setNotice(null);
       setAuthFallback(null);
 
-      let popup = null;
-      try {
-        popup = window.open('', 'composio-auth', 'popup=yes,width=520,height=760');
-        if (popup) {
-          popupRef.current = popup;
-          try {
-            popup.document.title = 'Composio';
-            popup.document.body.innerHTML = '<p style="font-family:system-ui,-apple-system,sans-serif;padding:28px;color:#444">Preparing authorization…</p>';
-          } catch (e) { /* cross-origin or closed */ }
-        }
-      } catch (e) { popup = null; }
-
       try {
         const value = await api('connect', { slug: app.slug });
         if (value.alreadyConnected) {
-          closePopup();
           setNotice({ kind: 'info', text: t(UI_LANG, 'alreadyConnected') });
           await loadConnections();
           return;
         }
         if (value.noAuth) {
-          closePopup();
           setNotice({ kind: 'info', text: t(UI_LANG, 'noAuthNotice') });
           return;
         }
@@ -1065,9 +1028,9 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
           error.code = 'link_failed';
           throw error;
         }
-        if (popup && !popup.closed) {
-          popup.location.href = value.redirectUrl;
-        } else {
+        try {
+          await api('openExternal', { url: value.redirectUrl });
+        } catch {
           setAuthFallback({ url: value.redirectUrl, slug: app.slug });
         }
         waitingRef.current = app.slug;
@@ -1075,7 +1038,6 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         setNotice({ kind: 'info', text: t(UI_LANG, 'waitingAuth') });
         startPolling(app.slug);
       } catch (error) {
-        closePopup();
         const details = error && error.details;
         setNotice({
           kind: 'error',
@@ -1087,7 +1049,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       } finally {
         setPendingSlug('');
       }
-    }, [pendingSlug, waiting, closePopup, loadConnections, startPolling]);
+    }, [pendingSlug, waiting, loadConnections, startPolling]);
 
     const disconnect = useCallback(async (id) => {
       if (!id || disconnecting) return;
@@ -1105,8 +1067,8 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     }, [disconnecting]);
 
     const cancelWaiting = () => {
-      finishAuth(false);
-      closePopup();
+      finishAuth();
+      setAuthFallback(null);
       setNotice(null);
     };
 
@@ -1250,9 +1212,9 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
           className: 'cmp-btn cmp-btn-primary',
           type: 'button',
           onClick: () => {
-            try {
-              window.open(authFallback.url, 'composio-auth', 'popup=yes,width=520,height=760');
-            } catch (e) { /* ignore */ }
+            void api('openExternal', { url: authFallback.url }).catch(() => {
+              setNotice({ kind: 'error', text: t(lang, 'authPopupBlocked') });
+            });
           },
         }, t(lang, 'openAuth'))) : null,
       status.configured ? h(React.Fragment, null,

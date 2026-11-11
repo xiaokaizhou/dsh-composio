@@ -9,6 +9,7 @@
  * Every response is { ok: true, value } or { ok: false, error: { code, message } }.
  */
 
+import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -431,6 +432,57 @@ async function actionPollLogin(ctx, payload) {
 function actionCancelLogin() {
   pendingLogin = null
   return { cancelled: true }
+}
+
+function normalizeExternalUrl(value) {
+  let parsed
+  try {
+    parsed = new URL(String(value || ''))
+  } catch {
+    const error = new Error('无法打开这个链接')
+    error.code = 'invalid_url'
+    error.status = 400
+    throw error
+  }
+  const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '::1' || parsed.hostname === '[::1]'
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) {
+    const error = new Error('只允许用系统浏览器打开 https 链接')
+    error.code = 'invalid_url'
+    error.status = 400
+    throw error
+  }
+  return parsed.href
+}
+
+function openInSystemBrowser(target) {
+  const command = process.platform === 'darwin'
+    ? 'open'
+    : process.platform === 'win32'
+      ? 'cmd'
+      : 'xdg-open'
+  const args = process.platform === 'win32'
+    ? ['/c', 'start', '', target]
+    : [target]
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { timeout: 15_000, windowsHide: true }, (cause) => {
+      if (cause) reject(cause)
+      else resolve()
+    })
+  })
+}
+
+async function actionOpenExternal(ctx, payload) {
+  const url = normalizeExternalUrl(payload?.url)
+  try {
+    await openInSystemBrowser(url)
+  } catch (cause) {
+    const error = new Error('无法自动打开系统浏览器，请点击页面上的链接手动打开')
+    error.code = 'open_failed'
+    error.status = 502
+    error.details = { url }
+    throw error
+  }
+  return { opened: true, url }
 }
 
 async function actionSaveSettings(ctx, payload) {
@@ -1095,6 +1147,8 @@ async function dispatch(ctx, action, payload) {
       return actionPollLogin(ctx, payload)
     case 'cancelLogin':
       return actionCancelLogin()
+    case 'openExternal':
+      return actionOpenExternal(ctx, payload)
     case 'clearKey':
       return actionClearKey(ctx)
     case 'saveSettings':

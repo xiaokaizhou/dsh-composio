@@ -61,11 +61,11 @@ pnpm add xiaokaizhou/dsh-composio
 
 #### 方式 A：OAuth 登录（推荐）
 
-打开 **设置 → Composio**，点「OAuth 登录」。插件会创建一个 Composio 登录会话，在浏览器里打开 Dashboard；完成登录后，插件自动取得 **User API Key**（`uak_...`）并写入 DSH 凭据存储。
+打开 **设置 → Composio**，点「OAuth 登录」。插件会创建一个 Composio 登录会话，并调用系统默认浏览器打开 Dashboard（DSH 桌面端同样适用）；完成登录后，插件自动取得 **User API Key**（`uak_...`）并写入 DSH 凭据存储。
 
 - 不需要手动复制 Key；
 - 登录会话约 13 分钟有效，页面最多轮询 3 分钟；
-- 如果浏览器拦截弹窗，页面会给出「打开登录页面」链接，继续完成即可。
+- 如果系统浏览器没有自动打开，页面会给出「打开登录页面」链接，手动打开即可。
 
 #### 方式 B：Project API Key
 
@@ -92,7 +92,7 @@ OAuth 登录会在授权完成后自动保存。手动方式：在 **设置 → 
 
 - 已有 ACTIVE 连接 → 直接标记已连接；
 - 平台支持免鉴权（`no_auth`）→ 立即连接；
-- 其余情况 → 自动查找/创建 Composio 托管 auth config，打开 OAuth 授权页，完成后连接变为 ACTIVE。
+- 其余情况 → 自动查找/创建 Composio 托管 auth config，用系统默认浏览器打开 OAuth 授权页，完成后连接变为 ACTIVE。
 
 > OAuth 在浏览器里完成，所以目标平台本身需要可访问。Composio 托管 OAuth 默认使用其自带 client，不需要自己申请 Google / Slack 的 client_id。
 
@@ -138,6 +138,7 @@ OAuth 登录会在授权完成后自动保存。手动方式：在 **设置 → 
 
 - API Key 只写入 DSH 凭据存储，不写入 `cordis.patch.yml`，不会出现在 README 或日志里。
 - 平台与连接请求只从本机 DSH 后端发往 Composio（默认 `https://backend.composio.dev`）；设置页 ↔ 本机后端走 `/_dsh/composio/api`，仅接受 loopback 同源 POST。
+- 自动打开浏览器只接受 `https` 链接（以及本地 mock 的 loopback `http`），不会打开 `file://` 或其他 scheme。
 - 非密钥偏好（`user_id`、自定义 Base URL）保存在 `~/.dsh/composio/settings.json`。
 - Composio 托管 OAuth 凭证并代理 API 调用，调用参数与结果会经过 Composio 云端；对合规敏感的数据请先评估。
 - 工具返回内容属于外部不可信数据，agent 不应把其中的指令当作系统指令执行。

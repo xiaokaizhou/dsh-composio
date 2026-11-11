@@ -59,11 +59,11 @@ Then make sure the profile `package.json` contains:
 
 ### A. OAuth login (recommended)
 
-Open **Settings → Composio** and click **Sign in with OAuth**. The plugin creates a Composio login session and opens the Dashboard in your browser. After you sign in, the plugin receives a **User API Key** (`uak_...`) and stores it in DSH credentials.
+Open **Settings → Composio** and click **Sign in with OAuth**. The plugin creates a Composio login session and opens the Dashboard in your default browser (this also works in the DSH desktop app). After you sign in, the plugin receives a **User API Key** (`uak_...`) and stores it in DSH credentials.
 
 - No key copying;
 - the login session lasts about 13 minutes and the page polls for up to 3 minutes;
-- if the browser blocks the popup, use the **Open the login page** link shown in the card.
+- if your browser does not open automatically, use the **Open the login page** link shown in the card.
 
 ### B. Project API Key
 
@@ -75,7 +75,7 @@ Open **Settings → Composio** and click **Sign in with OAuth**. The plugin crea
 
 ### Connect a toolkit
 
-Search for a toolkit and click its card. Existing active connections are detected; no-auth toolkits connect immediately; otherwise the browser opens Composio's OAuth page and the UI polls until the connection becomes active.
+Search for a toolkit and click its card. Existing active connections are detected; no-auth toolkits connect immediately; otherwise the system browser opens Composio's OAuth page and the UI polls until the connection becomes active.
 
 OAuth stores the returned key automatically; a manually entered key is verified before storage. The key lives in DSH credentials under `dsh-composio/api-key` and never goes into `cordis.patch.yml`. The summary shows the source (OAuth login / entered manually / environment) and key type (Project / User). Advanced settings let you change `user_id` (default `dsh-user`) and the API base URL.
 
@@ -106,6 +106,7 @@ Write operations (send email, post message, create issue, …) affect the real p
 
 - The API key lives in DSH credentials only; it is not written to the plugin YAML, README, or logs.
 - Requests go from the local DSH backend to Composio (`https://backend.composio.dev` by default). The Settings page talks to `/_dsh/composio/api`, which accepts loopback same-origin POST only.
+- Opening the system browser accepts `https` URLs only (plus loopback `http` for a local mock); it cannot open `file://` or any other scheme.
 - Non-secret preferences (`user_id`, base URL) live in `~/.dsh/composio/settings.json`.
 - Composio hosts OAuth credentials and proxies API calls, so request/response data passes through Composio's cloud. Evaluate this before using sensitive data.
 - Tool output is untrusted external data; the agent must not treat instructions inside it as system instructions.
