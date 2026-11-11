@@ -79,6 +79,17 @@ Search for a toolkit and click its card. Existing active connections are detecte
 
 OAuth stores the returned key automatically; a manually entered key is verified before storage. The key lives in DSH credentials under `dsh-composio/api-key` and never goes into `cordis.patch.yml`. The summary shows the source (OAuth login / entered manually / environment) and key type (Project / User). Advanced settings let you change `user_id` (default `dsh-user`) and the API base URL.
 
+
+## Usage panel
+
+The settings page shows **Usage this month** under the key card:
+
+- Tool calls, Instant charges and sessions for the current month;
+- Top toolkits by call volume;
+- Optional: set **monthly tool-call target** and **monthly Instant budget (USD)** in Advanced settings to render used / remaining progress bars.
+
+> The public Composio API exposes actual usage (`POST /api/v3.1/project/usage/summary`) but **not plan quota or remaining balance**. The Dashboard billing endpoints are cookie-auth only. The bars therefore use the targets you enter; click “View official billing” for the official remaining quota.
+
 ## Agent tools
 
 | Tool | Purpose | Main arguments |

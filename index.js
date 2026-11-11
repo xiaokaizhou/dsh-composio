@@ -58,6 +58,14 @@ function normalizeBaseUrl(value) {
 let preferencesCache = null
 let pendingLogin = null
 
+function normalizeUsageLimit(value, options = {}) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) return null
+  if (options.integer) return Math.max(1, Math.round(number))
+  return Math.round(number * 100) / 100
+}
+
 function normalizePreferences(saved = {}) {
   const loginMethod =
     saved?.loginMethod === 'oauth' || saved?.loginMethod === 'manual'
@@ -72,6 +80,8 @@ function normalizePreferences(saved = {}) {
     loginMethod,
     accountEmail:
       typeof saved?.accountEmail === 'string' ? saved.accountEmail.trim() : '',
+    monthlyToolLimit: normalizeUsageLimit(saved?.monthlyToolLimit, { integer: true }),
+    monthlyBudgetUsd: normalizeUsageLimit(saved?.monthlyBudgetUsd),
   }
 }
 
@@ -273,6 +283,126 @@ async function actionStatus(ctx) {
     accountEmail: preferences.accountEmail || '',
     userId: preferences.userId,
     baseUrl: preferences.baseUrl,
+    monthlyToolLimit: preferences.monthlyToolLimit,
+    monthlyBudgetUsd: preferences.monthlyBudgetUsd,
+  }
+}
+
+function readUsageLimit(value, options = {}) {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) {
+    const error = new Error(options.message || '用量上限必须是大于 0 的数字')
+    error.code = options.code || 'invalid_usage_limit'
+    error.status = 400
+    throw error
+  }
+  if (options.integer && !Number.isInteger(number)) {
+    const error = new Error('工具调用上限必须是整数')
+    error.code = 'invalid_usage_limit'
+    error.status = 400
+    throw error
+  }
+  return options.integer ? number : Math.round(number * 100) / 100
+}
+
+function currentMonthRange() {
+  const now = new Date()
+  const from = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+  return { from, to: Date.now() }
+}
+
+function usageQuantity(entities, name) {
+  const value = entities && entities[name] && entities[name].total_quantity
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
+async function actionUsage(ctx) {
+  const key = await readApiKey(ctx)
+  requireKey(key.key)
+  const preferences = await readPreferences()
+  const range = currentMonthRange()
+  const limits = {
+    toolCalls: preferences.monthlyToolLimit,
+    budgetUsd: preferences.monthlyBudgetUsd,
+  }
+
+  const [sessionResult, summaryResult] = await Promise.allSettled([
+    composio('/auth/session/info', {
+      apiKey: key.key,
+      baseUrl: preferences.baseUrl,
+    }),
+    composio('/project/usage/summary', {
+      method: 'POST',
+      apiKey: key.key,
+      baseUrl: preferences.baseUrl,
+      body: { from: range.from, to: range.to },
+    }),
+  ])
+
+  // Project keys may not have session access; usage still works without it.
+  const session = sessionResult.status === 'fulfilled' ? sessionResult.value : null
+  const plan = session?.project?.org?.plan || ''
+  const project = session?.project
+    ? { name: session.project.name || '', id: session.project.nano_id || '' }
+    : null
+
+  if (summaryResult.status === 'rejected') {
+    const error = summaryResult.reason
+    return {
+      available: false,
+      reason: 'usage_unavailable',
+      message: error?.composioMessage || error?.message || '无法读取用量',
+      keyType: keyTypeOf(key.key),
+      plan,
+      project,
+      from: range.from,
+      to: range.to,
+      limits,
+    }
+  }
+  const summary = summaryResult.value
+
+  let breakdown = null
+  try {
+    breakdown = await composio('/project/usage/tool_calls', {
+      method: 'POST',
+      apiKey: key.key,
+      baseUrl: preferences.baseUrl,
+      body: { from: range.from, to: range.to, group_by: 'toolkit_slug', limit: 6 },
+    })
+  } catch {
+    /* The top-toolkit list is optional. */
+  }
+
+  const entities = summary?.entities && typeof summary.entities === 'object'
+    ? summary.entities
+    : {}
+  const toolCalls = usageQuantity(entities, 'tool_calls')
+  const sessions = usageQuantity(entities, 'sessions')
+  const triggers = usageQuantity(entities, 'triggers')
+  const instantCharge = Number(summary?.instant_charge)
+  const topToolkits = Array.isArray(breakdown?.groups)
+    ? breakdown.groups.slice(0, 6).map((group) => ({
+      key: String(group?.key || ''),
+      count: Number(group?.total_quantity) || 0,
+    })).filter((group) => group.key)
+    : []
+
+  return {
+    available: true,
+    plan,
+    project,
+    from: range.from,
+    to: range.to,
+    toolCalls,
+    sessions,
+    triggers,
+    instantCharge: Number.isFinite(instantCharge) ? instantCharge : 0,
+    topToolkits,
+    limits,
   }
 }
 
@@ -498,7 +628,17 @@ async function actionSaveSettings(ctx, payload) {
   const baseUrl = normalizeBaseUrl(
     typeof payload.baseUrl === 'string' ? payload.baseUrl : previous.baseUrl,
   )
-  await writePreferences({ userId, baseUrl })
+  const monthlyToolLimit = readUsageLimit(payload.monthlyToolLimit, {
+    integer: true,
+    message: '每月工具调用上限必须是大于 0 的整数',
+  })
+  const monthlyBudgetUsd = readUsageLimit(payload.monthlyBudgetUsd, {
+    message: '每月预算必须是大于 0 的美元金额',
+  })
+  const next = { userId, baseUrl }
+  if (monthlyToolLimit !== undefined) next.monthlyToolLimit = monthlyToolLimit
+  if (monthlyBudgetUsd !== undefined) next.monthlyBudgetUsd = monthlyBudgetUsd
+  await writePreferences(next)
   return actionStatus(ctx)
 }
 
@@ -1347,6 +1487,8 @@ async function dispatch(ctx, action, payload) {
   switch (action) {
     case 'status':
       return actionStatus(ctx)
+    case 'usage':
+      return actionUsage(ctx)
     case 'saveKey':
       return actionSaveKey(ctx, payload)
     case 'startLogin':

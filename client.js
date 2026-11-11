@@ -81,6 +81,28 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       saveSettings: '保存设置',
       settingsSaved: '设置已保存',
       invalidSettings: '请检查 User ID 与 API 地址。',
+      usageTitle: '本月用量',
+      usagePlan: '套餐 {plan}',
+      usageToolCalls: '工具调用',
+      usageInstantCharge: 'Instant 费用',
+      usageSessions: '会话',
+      usageNoLimit: '未设置月度目标',
+      usageSetGoal: '设置月度目标',
+      usageRemaining: '剩余 {value}',
+      usageUsed: '已用 {value}',
+      usageOf: '{used} / {limit}',
+      usageTopToolkits: '主要平台',
+      usageUnavailable: '暂时无法读取用量：{message}',
+      usageOfficialHint: 'Composio 公共 API 只返回实际用量，不返回官方配额；官方余量请到 Dashboard 账单页查看。',
+      usageRange: '{from} – {to}',
+      usageLimitLabel: '每月工具调用上限',
+      usageLimitHint: '可选。填写套餐额度后，这里会显示已用 / 剩余进度。',
+      usageBudgetLabel: '每月 Instant 预算（USD）',
+      usageBudgetHint: '可选。填写月度预算后，这里会显示费用进度。',
+      usageInvalidLimit: '请填写大于 0 的数字。',
+      usageDashboard: '查看官方账单',
+      usageRefresh: '刷新用量',
+      usageGoalSaved: '月度目标已保存',
       connectedServices: '已连接的服务',
       connectedCount: '{n} 个',
       noConnections: '还没有连接任何服务。点击下面的平台卡片即可开始授权。',
@@ -199,6 +221,28 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       saveSettings: 'Save settings',
       settingsSaved: 'Settings saved',
       invalidSettings: 'Check the User ID and API URL.',
+      usageTitle: 'Usage this month',
+      usagePlan: '{plan} plan',
+      usageToolCalls: 'Tool calls',
+      usageInstantCharge: 'Instant charges',
+      usageSessions: 'Sessions',
+      usageNoLimit: 'No monthly target set',
+      usageSetGoal: 'Set monthly target',
+      usageRemaining: '{value} remaining',
+      usageUsed: '{value} used',
+      usageOf: '{used} / {limit}',
+      usageTopToolkits: 'Top toolkits',
+      usageUnavailable: 'Could not read usage: {message}',
+      usageOfficialHint: 'The public Composio API reports actual usage, not plan quota. Check the Dashboard billing page for official remaining quota.',
+      usageRange: '{from} – {to}',
+      usageLimitLabel: 'Monthly tool-call target',
+      usageLimitHint: 'Optional. Enter your plan allowance to show used / remaining progress.',
+      usageBudgetLabel: 'Monthly Instant budget (USD)',
+      usageBudgetHint: 'Optional. Enter a monthly budget to show cost progress.',
+      usageInvalidLimit: 'Enter a number greater than 0.',
+      usageDashboard: 'View official billing',
+      usageRefresh: 'Refresh usage',
+      usageGoalSaved: 'Monthly target saved',
       connectedServices: 'Connected services',
       connectedCount: '{n}',
       noConnections: 'No service is connected yet. Click a toolkit card below to start authorizing.',
@@ -334,6 +378,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       no_managed_auth: 'managedAuthUnavailable',
       unknown_toolkit: 'unknownPlatform',
       invalid_user_id: 'invalidSettings',
+      invalid_usage_limit: 'usageInvalidLimit',
       invalid_base_url: 'invalidSettings',
       invalid_slug: 'unknownPlatform',
       connect_failed: 'connectFailed',
@@ -395,6 +440,8 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         return h('svg', common, h('path', { d: 'M6 6l12 12' }), h('path', { d: 'M18 6 6 18' }));
       case 'spark':
         return h('svg', common, h('path', { d: 'M12 3v4' }), h('path', { d: 'M12 17v4' }), h('path', { d: 'M3 12h4' }), h('path', { d: 'M17 12h4' }), h('path', { d: 'm5.6 5.6 2.8 2.8' }), h('path', { d: 'm15.6 15.6 2.8 2.8' }), h('path', { d: 'm18.4 5.6-2.8 2.8' }), h('path', { d: 'm8.4 15.6-2.8 2.8' }));
+      case 'chart':
+        return h('svg', common, h('path', { d: 'M4 19V5' }), h('path', { d: 'M4 19h16' }), h('path', { d: 'M8 16v-5' }), h('path', { d: 'M12 16V8' }), h('path', { d: 'M16 16v-3' }));
       default:
         return null;
     }
@@ -819,6 +866,138 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
   /* credential dialog (toolkits without managed auth)                 */
   /* ---------------------------------------------------------------- */
 
+  function UsageCard({ usage, loading, error, onRefresh, onSetGoal, onOpenDashboard }) {
+    const lang = useLang();
+    const busy = loading && !usage;
+    const locale = lang === 'zh' ? 'zh-CN' : 'en-US';
+    const number = new Intl.NumberFormat(locale);
+    const money = new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+    const toolCalls = Number(usage && usage.toolCalls) || 0;
+    const sessions = Number(usage && usage.sessions) || 0;
+    const instantCharge = Number(usage && usage.instantCharge) || 0;
+    const toolLimit = Number(usage && usage.limits && usage.limits.toolCalls) || 0;
+    const budgetLimit = Number(usage && usage.limits && usage.limits.budgetUsd) || 0;
+    const toolPercent = toolLimit > 0 ? Math.min(100, (toolCalls / toolLimit) * 100) : 0;
+    const budgetPercent = budgetLimit > 0 ? Math.min(100, (instantCharge / budgetLimit) * 100) : 0;
+    const toolOver = toolLimit > 0 && toolCalls > toolLimit;
+    const budgetOver = budgetLimit > 0 && instantCharge > budgetLimit;
+    const range = usage && usage.from && usage.to
+      ? t(lang, 'usageRange', {
+        from: new Date(usage.from).toLocaleDateString(locale),
+        to: new Date(usage.to).toLocaleDateString(locale),
+      })
+      : '';
+
+    const head = h('div', { className: 'cmp-usage-head' },
+      h('div', { className: 'cmp-usage-title-wrap' },
+        h('span', { className: 'cmp-usage-icon' }, h(Icon, { name: 'chart', size: 16 })),
+        h('div', null,
+          h('h2', { className: 'cmp-usage-title' }, t(lang, 'usageTitle')),
+          range ? h('div', { className: 'cmp-usage-range' }, range) : null)),
+      h('div', { className: 'cmp-usage-actions' },
+        usage && usage.plan
+          ? h('span', { className: 'cmp-plan' }, String(usage.plan).toUpperCase())
+          : null,
+        h('button', {
+          className: 'cmp-icon-btn',
+          type: 'button',
+          title: t(lang, 'usageRefresh'),
+          'aria-label': t(lang, 'usageRefresh'),
+          disabled: loading,
+          onClick: onRefresh,
+        }, h(Icon, { name: 'refresh', size: 14 }))));
+
+    if (busy) {
+      return h('section', { className: 'cmp-usage' }, head,
+        h('div', { className: 'cmp-usage-skeleton' }),
+        h('div', { className: 'cmp-usage-skeleton cmp-usage-skeleton-short' }));
+    }
+
+    if (error && !usage) {
+      return h('section', { className: 'cmp-usage' }, head,
+        h('div', { className: 'cmp-inline-error' },
+          h('span', null, errorText(lang, error)),
+          h('button', { className: 'cmp-textlink', type: 'button', onClick: onRefresh }, t(lang, 'retry'))));
+    }
+
+    if (usage && usage.available === false) {
+      return h('section', { className: 'cmp-usage' }, head,
+        h('div', { className: 'cmp-usage-unavailable' },
+          h('span', null, t(lang, 'usageUnavailable', { message: usage.message || '' })),
+          h('button', { className: 'cmp-textlink', type: 'button', onClick: onOpenDashboard },
+            t(lang, 'usageDashboard'), ' ', h(Icon, { name: 'external', size: 11 }))));
+    }
+
+    const toolBar = h('div', { className: 'cmp-usage-meter' },
+      h('div', { className: 'cmp-usage-meter-head' },
+        h('span', null, t(lang, 'usageToolCalls')),
+        h('span', { className: 'cmp-usage-meter-value' },
+          toolLimit > 0
+            ? t(lang, 'usageOf', { used: number.format(toolCalls), limit: number.format(toolLimit) })
+            : number.format(toolCalls))),
+      toolLimit > 0
+        ? h('div', { className: 'cmp-bar' },
+          h('span', {
+            className: 'cmp-bar-fill' + (toolOver ? ' cmp-bar-over' : ''),
+            style: { width: toolPercent + '%' },
+          }))
+        : h('div', { className: 'cmp-bar cmp-bar-empty' }),
+      h('div', { className: 'cmp-usage-meter-foot' },
+        toolLimit > 0
+          ? h('span', { className: toolOver ? 'cmp-usage-over' : '' },
+            t(lang, 'usageRemaining', { value: number.format(Math.max(0, toolLimit - toolCalls)) }))
+          : h(React.Fragment, null,
+            h('span', null, t(lang, 'usageNoLimit')),
+            h('button', { className: 'cmp-textlink', type: 'button', onClick: onSetGoal }, t(lang, 'usageSetGoal')))));
+
+    const budgetBar = h('div', { className: 'cmp-usage-meter' },
+      h('div', { className: 'cmp-usage-meter-head' },
+        h('span', null, t(lang, 'usageInstantCharge')),
+        h('span', { className: 'cmp-usage-meter-value' },
+          budgetLimit > 0
+            ? t(lang, 'usageOf', { used: money.format(instantCharge), limit: money.format(budgetLimit) })
+            : money.format(instantCharge))),
+      budgetLimit > 0
+        ? h('div', { className: 'cmp-bar' },
+          h('span', {
+            className: 'cmp-bar-fill cmp-bar-budget' + (budgetOver ? ' cmp-bar-over' : ''),
+            style: { width: budgetPercent + '%' },
+          }))
+        : h('div', { className: 'cmp-bar cmp-bar-empty' }),
+      h('div', { className: 'cmp-usage-meter-foot' },
+        budgetLimit > 0
+          ? h('span', { className: budgetOver ? 'cmp-usage-over' : '' },
+            t(lang, 'usageRemaining', { value: money.format(Math.max(0, budgetLimit - instantCharge)) }))
+          : h(React.Fragment, null,
+            h('span', null, t(lang, 'usageNoLimit')),
+            h('button', { className: 'cmp-textlink', type: 'button', onClick: onSetGoal }, t(lang, 'usageSetGoal')))));
+
+    const top = usage && Array.isArray(usage.topToolkits) ? usage.topToolkits : [];
+
+    return h('section', { className: 'cmp-usage' }, head,
+      h('div', { className: 'cmp-usage-stats' },
+        h('div', { className: 'cmp-usage-stat' },
+          h('span', { className: 'cmp-usage-value' }, number.format(toolCalls)),
+          h('span', { className: 'cmp-usage-label' }, t(lang, 'usageToolCalls'))),
+        h('div', { className: 'cmp-usage-stat' },
+          h('span', { className: 'cmp-usage-value' }, money.format(instantCharge)),
+          h('span', { className: 'cmp-usage-label' }, t(lang, 'usageInstantCharge'))),
+        h('div', { className: 'cmp-usage-stat' },
+          h('span', { className: 'cmp-usage-value' }, number.format(sessions)),
+          h('span', { className: 'cmp-usage-label' }, t(lang, 'usageSessions')))),
+      h('div', { className: 'cmp-usage-bars' }, toolBar, budgetBar),
+      top.length > 0 ? h('div', { className: 'cmp-usage-top' },
+        h('span', { className: 'cmp-usage-top-label' }, t(lang, 'usageTopToolkits')),
+        h('div', { className: 'cmp-chips' },
+          top.map((item) => h('span', { className: 'cmp-chip', key: item.key },
+            h('span', { className: 'cmp-chip-name' }, item.key),
+            h('span', { className: 'cmp-chip-count' }, number.format(item.count)))))) : null,
+      h('div', { className: 'cmp-usage-foot' },
+        h('span', null, t(lang, 'usageOfficialHint')),
+        h('button', { className: 'cmp-textlink', type: 'button', onClick: onOpenDashboard },
+          t(lang, 'usageDashboard'), ' ', h(Icon, { name: 'external', size: 11 }))));
+  }
+
   function CredentialDialog({ prompt, lang, onCancel, onConnected }) {
     const [value, setValue] = useState('');
     const [busy, setBusy] = useState(false);
@@ -914,15 +1093,32 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     const lang = useLang();
     const [userId, setUserId] = useState(status.userId || '');
     const [baseUrl, setBaseUrl] = useState(status.baseUrl || '');
+    const [monthlyToolLimit, setMonthlyToolLimit] = useState(
+      status.monthlyToolLimit != null ? String(status.monthlyToolLimit) : '',
+    );
+    const [monthlyBudgetUsd, setMonthlyBudgetUsd] = useState(
+      status.monthlyBudgetUsd != null ? String(status.monthlyBudgetUsd) : '',
+    );
     const [saving, setSaving] = useState(false);
 
     useEffect(() => { setUserId(status.userId || ''); }, [status.userId]);
     useEffect(() => { setBaseUrl(status.baseUrl || ''); }, [status.baseUrl]);
+    useEffect(() => {
+      setMonthlyToolLimit(status.monthlyToolLimit != null ? String(status.monthlyToolLimit) : '');
+    }, [status.monthlyToolLimit]);
+    useEffect(() => {
+      setMonthlyBudgetUsd(status.monthlyBudgetUsd != null ? String(status.monthlyBudgetUsd) : '');
+    }, [status.monthlyBudgetUsd]);
 
     const save = async () => {
       setSaving(true);
       try {
-        const value = await api('saveSettings', { userId, baseUrl });
+        const value = await api('saveSettings', {
+          userId,
+          baseUrl,
+          monthlyToolLimit,
+          monthlyBudgetUsd,
+        });
         onSaved(value);
         onNotice({ kind: 'success', text: t(UI_LANG, 'settingsSaved') });
       } catch (error) {
@@ -932,7 +1128,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       }
     };
 
-    return h('details', { className: 'cmp-advanced' },
+    return h('details', { className: 'cmp-advanced', id: 'cmp-advanced' },
       h('summary', null, h('span', { className: 'cmp-chevron' }, h(Icon, { name: 'chevron', size: 13 })), t(lang, 'advanced')),
       h('div', { className: 'cmp-advanced-body' },
         h('div', { className: 'cmp-field' },
@@ -955,6 +1151,33 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
             onChange: (event) => setBaseUrl(event.target.value),
           }),
           h('div', { className: 'cmp-fine' }, t(lang, 'baseUrlHint'))),
+        h('div', { className: 'cmp-advanced-grid' },
+          h('div', { className: 'cmp-field' },
+            h('label', { className: 'cmp-label', htmlFor: 'cmp-usage-tool-limit' }, t(lang, 'usageLimitLabel')),
+            h('input', {
+              id: 'cmp-usage-tool-limit',
+              className: 'cmp-input',
+              type: 'number',
+              min: '1',
+              step: '1',
+              value: monthlyToolLimit,
+              placeholder: '10000',
+              onChange: (event) => setMonthlyToolLimit(event.target.value),
+            }),
+            h('div', { className: 'cmp-fine' }, t(lang, 'usageLimitHint'))),
+          h('div', { className: 'cmp-field' },
+            h('label', { className: 'cmp-label', htmlFor: 'cmp-usage-budget' }, t(lang, 'usageBudgetLabel')),
+            h('input', {
+              id: 'cmp-usage-budget',
+              className: 'cmp-input',
+              type: 'number',
+              min: '0.01',
+              step: '0.01',
+              value: monthlyBudgetUsd,
+              placeholder: '2.00',
+              onChange: (event) => setMonthlyBudgetUsd(event.target.value),
+            }),
+            h('div', { className: 'cmp-fine' }, t(lang, 'usageBudgetHint')))),
         h('div', { className: 'cmp-advanced-actions' },
           h('button', {
             className: 'cmp-btn cmp-btn-primary',
@@ -983,6 +1206,9 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     const [waiting, setWaiting] = useState(null);
     const [authFallback, setAuthFallback] = useState(null);
     const [credentialPrompt, setCredentialPrompt] = useState(null);
+    const [usage, setUsage] = useState(null);
+    const [usageLoading, setUsageLoading] = useState(false);
+    const [usageError, setUsageError] = useState(null);
     const [disconnectId, setDisconnectId] = useState('');
     const [disconnecting, setDisconnecting] = useState('');
 
@@ -1003,6 +1229,33 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     }, []);
 
     useEffect(() => { void loadStatus(); }, [loadStatus]);
+
+    const loadUsage = useCallback(async () => {
+      setUsageLoading(true);
+      setUsageError(null);
+      try {
+        const value = await api('usage');
+        setUsage(value);
+      } catch (error) {
+        setUsageError(error);
+      } finally {
+        setUsageLoading(false);
+      }
+    }, []);
+
+    useEffect(() => {
+      if (status && status.configured) {
+        void loadUsage();
+      } else {
+        setUsage(null);
+        setUsageError(null);
+      }
+    }, [status && status.configured, status && status.userId, loadUsage]);
+
+    const handleSaved = useCallback((value) => {
+      setStatus(value);
+      void loadUsage();
+    }, [loadUsage]);
 
     const loadConnections = useCallback(async () => {
       setConnLoading(true);
@@ -1210,6 +1463,17 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
 
     const retryStatus = () => { void loadStatus(); };
     const retryApps = () => { void fetchToolkits({ reset: true, search: queryRef.current }); };
+    const openAdvanced = () => {
+      const element = document.getElementById('cmp-advanced');
+      if (!element) return;
+      element.open = true;
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    const openBilling = () => {
+      void api('openExternal', { url: 'https://dashboard.composio.dev/' }).catch(() => {
+        setNotice({ kind: 'error', text: t(lang, 'authPopupBlocked') });
+      });
+    };
 
     const connectionBySlug = useMemo(() => {
       const rank = { ACTIVE: 5, INITIALIZING: 4, FAILED: 3, EXPIRED: 2, INACTIVE: 1, UNKNOWN: 0 };
@@ -1294,6 +1558,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         onClick: () => {
           setRefreshKey((value) => value + 1);
           void loadConnections();
+          void loadUsage();
         },
       }, h(Icon, { name: 'refresh', size: 14 }), t(lang, 'refresh')));
 
@@ -1340,7 +1605,15 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     return h('section', { className: 'cmp-root' },
       header,
       h(NoticeBar, { notice, onClose: () => setNotice(null), lang }),
-      h(KeyCard, { status, onSaved: setStatus, onNotice: setNotice }),
+      h(KeyCard, { status, onSaved: handleSaved, onNotice: setNotice }),
+      status.configured ? h(UsageCard, {
+        usage,
+        loading: usageLoading,
+        error: usageError,
+        onRefresh: () => { void loadUsage(); },
+        onSetGoal: openAdvanced,
+        onOpenDashboard: openBilling,
+      }) : null,
       authFallback ? h('div', { className: 'cmp-notice cmp-notice-info' },
         h('span', { className: 'cmp-notice-icon' }, h(Icon, { name: 'info' })),
         h('div', { className: 'cmp-notice-body' }, h('span', null, t(lang, 'authPopupBlocked'))),
@@ -1431,7 +1704,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         : h('div', { className: 'cmp-locked' },
           h('span', { className: 'cmp-locked-icon' }, h(Icon, { name: 'lock', size: 16 })),
           t(lang, 'noKeyHint')),
-      h(AdvancedSettings, { status, onSaved: setStatus, onNotice: setNotice }));
+      h(AdvancedSettings, { status, onSaved: handleSaved, onNotice: setNotice }));
   }
 
   /* ---------------------------------------------------------------- */
@@ -1595,7 +1868,46 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     '.cmp-modal-error{margin-top:2px;padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 8%,transparent)}',
     '.cmp-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}',
     '.cmp-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px;font-size:11px;color:var(--dsw-alias-label-secondary)}',
-    '@media (max-width:720px){.cmp-header-link{display:none}.cmp-steps{grid-template-columns:1fr}.cmp-keyrow{flex-wrap:wrap}.cmp-keyrow .cmp-input{flex-basis:100%}.cmp-keyrow .cmp-btn{width:100%}.cmp-grid{grid-template-columns:1fr}.cmp-conn-meta{white-space:normal}.cmp-toolbar{flex-wrap:wrap}.cmp-search{flex-basis:100%}}',
+
+    '.cmp-usage{margin:0 0 18px;padding:15px 16px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-layer-1)}',
+    '.cmp-usage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}',
+    '.cmp-usage-title-wrap{display:flex;align-items:flex-start;gap:9px;min-width:0}',
+    '.cmp-usage-icon{display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;border-radius:8px;background:rgba(111,91,245,.13);color:var(--cmp-accent)}',
+    '.cmp-usage-title{font-size:13px;font-weight:600;margin:0;line-height:1.35}',
+    '.cmp-usage-range{font-size:11px;color:var(--dsw-alias-label-secondary);margin-top:1px}',
+    '.cmp-usage-actions{display:flex;align-items:center;gap:7px}',
+    '.cmp-plan{font-size:10px;font-weight:600;letter-spacing:.04em;padding:3px 7px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}',
+    '.cmp-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}',
+    '.cmp-icon-btn:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}',
+    '.cmp-icon-btn:disabled{opacity:.5;cursor:default}',
+    '.cmp-usage-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}',
+    '.cmp-usage-stat{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:9px;background:var(--dsw-alias-bg-layer-2)}',
+    '.cmp-usage-value{font-size:16px;font-weight:650;line-height:1.3;font-variant-numeric:tabular-nums}',
+    '.cmp-usage-label{font-size:10px;color:var(--dsw-alias-label-secondary)}',
+    '.cmp-usage-bars{display:flex;flex-direction:column;gap:10px}',
+    '.cmp-usage-meter{display:flex;flex-direction:column;gap:4px}',
+    '.cmp-usage-meter-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:11px;color:var(--dsw-alias-label-secondary)}',
+    '.cmp-usage-meter-value{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);font-weight:500}',
+    '.cmp-bar{height:7px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);overflow:hidden}',
+    '.cmp-bar-fill{display:block;height:100%;min-width:2px;border-radius:999px;background:var(--cmp-accent);transition:width .25s ease}',
+    '.cmp-bar-budget{background:linear-gradient(90deg,#2bb673,#7ac943)}',
+    '.cmp-bar-over{background:var(--dsw-alias-state-error-primary)}',
+    '.cmp-bar-empty{background:var(--dsw-alias-bg-layer-2);border:1px dashed var(--dsw-alias-border-l2)}',
+    '.cmp-usage-meter-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:10px;color:var(--dsw-alias-label-secondary);min-height:15px}',
+    '.cmp-usage-over{color:var(--dsw-alias-state-error-primary)}',
+    '.cmp-usage-top{display:flex;align-items:center;gap:9px;margin-top:11px;min-width:0}',
+    '.cmp-usage-top-label{font-size:10px;color:var(--dsw-alias-label-secondary);flex:none}',
+    '.cmp-chips{display:flex;flex-wrap:wrap;gap:5px;min-width:0}',
+    '.cmp-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);font-size:10px;max-width:100%}',
+    '.cmp-chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}',
+    '.cmp-chip-count{color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}',
+    '.cmp-usage-foot{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-top:11px;padding-top:9px;border-top:1px solid var(--dsw-alias-border-l1);font-size:10px;color:var(--dsw-alias-label-secondary);line-height:1.45}',
+    '.cmp-usage-foot .cmp-textlink{flex:none}',
+    '.cmp-usage-skeleton{height:42px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);animation:cmp-pulse 1.4s ease-in-out infinite;margin-bottom:8px}',
+    '.cmp-usage-skeleton-short{height:24px;width:65%;margin-bottom:0}',
+    '.cmp-usage-unavailable{display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--dsw-alias-label-secondary)}',
+    '.cmp-advanced-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}',
+    '@media (max-width:720px){.cmp-header-link{display:none}.cmp-steps{grid-template-columns:1fr}.cmp-keyrow{flex-wrap:wrap}.cmp-keyrow .cmp-input{flex-basis:100%}.cmp-keyrow .cmp-btn{width:100%}.cmp-grid{grid-template-columns:1fr}.cmp-usage-stats{grid-template-columns:1fr 1fr}.cmp-advanced-grid{grid-template-columns:1fr}.cmp-conn-meta{white-space:normal}.cmp-toolbar{flex-wrap:wrap}.cmp-search{flex-basis:100%}}',
   ].join('\n');
 
   /* ---------------------------------------------------------------- */

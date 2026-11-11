@@ -1,7 +1,7 @@
 {
   "name": "dsh-composio",
-  "version": "0.4.0",
-  "description": "Connect Gmail, Slack, GitHub, Notion and 1,000+ apps to DSH through Composio — OAuth login, settings UI and agent tools.",
+  "version": "0.5.0",
+  "description": "Connect Gmail, Slack, GitHub, Notion and 1,000+ apps to DSH through Composio — OAuth login, usage dashboard, settings UI and agent tools.",
   "author": "xiaokaizhou",
   "repository": {
     "type": "git",
