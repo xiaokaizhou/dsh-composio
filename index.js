@@ -605,6 +605,71 @@ async function createManagedAuthConfig(ctx, preferences, slug, key) {
   }
 }
 
+function apiKeyAuthFromToolkit(detail) {
+  const details = Array.isArray(detail?.auth_config_details) ? detail.auth_config_details : []
+  for (const item of details) {
+    if (String(item?.mode || '').toUpperCase() !== 'API_KEY') continue
+    const required = item?.fields?.connected_account_initiation?.required
+    const field = Array.isArray(required)
+      ? required.find((entry) => typeof entry?.name === 'string' && entry.name)
+      : null
+    if (!field) continue
+    return {
+      mode: 'API_KEY',
+      field,
+      hintUrl: typeof item?.auth_hint_url === 'string' ? item.auth_hint_url : '',
+    }
+  }
+  return null
+}
+
+async function findCustomApiKeyAuthConfig(preferences, slug, key) {
+  const data = await composio(
+    `/auth_configs?toolkit_slug=${encodeURIComponent(slug)}&is_composio_managed=false&limit=50`,
+    { apiKey: key, baseUrl: preferences.baseUrl },
+  )
+  const items = Array.isArray(data?.items) ? data.items : []
+  return items.find((item) => {
+    const scheme = String(item?.auth_scheme || item?.authScheme || '').toUpperCase()
+    const status = String(item?.status || 'ENABLED').toUpperCase()
+    return scheme === 'API_KEY' && status !== 'DISABLED'
+  }) || null
+}
+
+async function createCustomApiKeyAuthConfig(preferences, slug, key, name) {
+  try {
+    const data = await composio('/auth_configs', {
+      method: 'POST',
+      apiKey: key,
+      baseUrl: preferences.baseUrl,
+      body: {
+        toolkit: { slug },
+        auth_config: {
+          type: 'use_custom_auth',
+          authScheme: 'API_KEY',
+          name: name || `${slug} API Key`,
+          credentials: {},
+        },
+      },
+    })
+    return data?.auth_config || null
+  } catch (cause) {
+    if (cause?.status === 409 || cause?.status === 422) {
+      const existing = await findCustomApiKeyAuthConfig(preferences, slug, key)
+      if (existing) return existing
+    }
+    throw cause
+  }
+}
+
+async function toolkitDetail(preferences, slug, key) {
+  return composio(`/toolkits/${encodeURIComponent(slug)}`, {
+    apiKey: key,
+    baseUrl: preferences.baseUrl,
+    timeoutMs: 20_000,
+  })
+}
+
 async function connectToolkit(ctx, slugValue) {
   const key = await readApiKey(ctx)
   requireKey(key.key)
@@ -658,14 +723,59 @@ async function connectToolkit(ctx, slugValue) {
       ? toolkit.composio_managed_auth_schemes
       : []
     if (!managedSchemes.length) {
+      let detail = null
+      try {
+        detail = await toolkitDetail(preferences, slug, key.key)
+      } catch (cause) {
+        if (cause?.status !== 404) throw cause
+      }
+      const apiKeyAuth = apiKeyAuthFromToolkit(detail || toolkit)
+      if (apiKeyAuth) {
+        let custom = await findCustomApiKeyAuthConfig(preferences, slug, key.key)
+        if (!custom) {
+          custom = await createCustomApiKeyAuthConfig(
+            preferences,
+            slug,
+            key.key,
+            `${detail?.name || toolkit.name || slug} API Key`,
+          )
+        }
+        if (!custom?.id) {
+          const error = new Error('无法为这个平台创建 API Key 授权配置')
+          error.code = 'auth_config_failed'
+          error.status = 502
+          throw error
+        }
+        const field = apiKeyAuth.field
+        return {
+          requiresCredentials: true,
+          toolkit: {
+            slug,
+            name: detail?.name || toolkit.name || slug,
+          },
+          authConfigId: custom.id,
+          authScheme: 'API_KEY',
+          field: {
+            name: field.name,
+            label: field.displayName || field.name,
+            description: field.description || '',
+            placeholder: field.placeholder || '',
+            secret: field.is_secret !== false,
+          },
+          appUrl: detail?.meta?.app_url || toolkit?.meta?.app_url || '',
+          hintUrl: apiKeyAuth.hintUrl || detail?.auth_guide_url || '',
+          message: '这个平台需要填写 API Key 才能连接',
+        }
+      }
       const error = new Error(
-        '这个平台暂不支持 Composio 托管授权，需要先在 Composio 控制台配置自定义认证',
+        '这个平台没有 Composio 托管授权，也暂不支持在本页填写凭据，需要到平台页面完成授权配置',
       )
       error.code = 'no_managed_auth'
       error.status = 409
       error.details = {
-        authGuideUrl: toolkit.auth_guide_url || '',
-        appUrl: toolkit?.meta?.app_url || '',
+        authGuideUrl: detail?.auth_guide_url || toolkit.auth_guide_url || '',
+        appUrl: detail?.meta?.app_url || toolkit?.meta?.app_url || '',
+        hintUrl: apiKeyAuth?.hintUrl || '',
       }
       throw error
     }
@@ -705,6 +815,104 @@ async function connectToolkit(ctx, slugValue) {
 
 async function actionConnect(ctx, payload) {
   return connectToolkit(ctx, payload?.slug)
+}
+
+async function actionConnectWithKey(ctx, payload) {
+  const key = await readApiKey(ctx)
+  requireKey(key.key)
+  const preferences = await readPreferences()
+  const slug = requireSlug(payload?.slug)
+  const authConfigId = typeof payload?.authConfigId === 'string'
+    ? payload.authConfigId.trim()
+    : ''
+  if (!/^ac_[A-Za-z0-9_-]{1,80}$/.test(authConfigId)) {
+    const error = new Error('授权配置标识不合法')
+    error.code = 'invalid_auth_config'
+    error.status = 400
+    throw error
+  }
+  const value = typeof payload?.value === 'string' ? payload.value.trim() : ''
+  if (!value) {
+    const error = new Error('请填写 API Key')
+    error.code = 'credentials_required'
+    error.status = 400
+    throw error
+  }
+  if (value.length > 8192) {
+    const error = new Error('API Key 太长')
+    error.code = 'invalid_credentials'
+    error.status = 400
+    throw error
+  }
+
+  const detail = await toolkitDetail(preferences, slug, key.key)
+  const apiKeyAuth = apiKeyAuthFromToolkit(detail)
+  if (!apiKeyAuth) {
+    const error = new Error('这个平台不支持在当前页面填写 API Key')
+    error.code = 'no_api_key_scheme'
+    error.status = 400
+    throw error
+  }
+
+  const configData = await composio(
+    `/auth_configs?toolkit_slug=${encodeURIComponent(slug)}&is_composio_managed=false&limit=50`,
+    { apiKey: key.key, baseUrl: preferences.baseUrl },
+  )
+  const config = Array.isArray(configData?.items)
+    ? configData.items.find((item) => item?.id === authConfigId)
+    : null
+  if (!config) {
+    const error = new Error('授权配置已失效，请重新点击连接')
+    error.code = 'invalid_auth_config'
+    error.status = 400
+    throw error
+  }
+  const scheme = String(config.auth_scheme || config.authScheme || '').toUpperCase()
+  if (scheme !== 'API_KEY') {
+    const error = new Error('这个授权配置不是 API Key 类型')
+    error.code = 'invalid_auth_config'
+    error.status = 400
+    throw error
+  }
+
+  try {
+    const created = await composio('/connected_accounts', {
+      method: 'POST',
+      apiKey: key.key,
+      baseUrl: preferences.baseUrl,
+      timeoutMs: 45_000,
+      body: {
+        auth_config: { id: authConfigId },
+        connection: {
+          user_id: preferences.userId,
+          state: {
+            authScheme: 'API_KEY',
+            val: {
+              status: 'ACTIVE',
+              [apiKeyAuth.field.name]: value,
+            },
+          },
+        },
+      },
+    })
+    return {
+      connected: true,
+      connectedAccountId: created?.id || '',
+      status: String(created?.status || 'ACTIVE').toUpperCase(),
+      authScheme: 'API_KEY',
+    }
+  } catch (cause) {
+    if (cause?.status === 400 || cause?.status === 422) {
+      const error = new Error('平台拒绝了这组凭据，请检查 API Key 后重试')
+      error.code = 'credential_rejected'
+      error.status = 400
+      error.details = {
+        composioMessage: cause?.composioMessage || cause?.message || '',
+      }
+      throw error
+    }
+    throw cause
+  }
 }
 
 async function actionDisconnect(ctx, payload) {
@@ -1159,6 +1367,8 @@ async function dispatch(ctx, action, payload) {
       return actionConnections(ctx, payload)
     case 'connect':
       return actionConnect(ctx, payload)
+    case 'connectWithKey':
+      return actionConnectWithKey(ctx, payload)
     case 'disconnect':
       return actionDisconnect(ctx, payload)
     default: {

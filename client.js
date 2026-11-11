@@ -119,6 +119,17 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       authPopupBlocked: '无法自动打开系统浏览器。点击下面的按钮继续。',
       openAuth: '打开授权页面',
       connectFailed: '无法创建授权链接，请稍后重试。',
+      credentialTitle: '连接 {name}',
+      credentialBody: '这个平台不支持自动跳转授权，需要填写 {field}。',
+      credentialPlaceholder: '粘贴 {label}',
+      credentialSubmit: '连接',
+      credentialConnecting: '连接中…',
+      credentialRequired: '请填写 API Key',
+      credentialRejected: 'API Key 被平台拒绝，请检查后重试。',
+      credentialConnected: '连接已创建；凭据会在首次调用该平台工具时校验。',
+      getApiKey: '获取 API Key',
+      openPlatform: '打开平台页面',
+      manualAuthOpened: '这个平台需要在平台页面完成授权配置，已为你打开页面。',
       openAuthGuide: '查看认证配置指南',
       managedAuthUnavailable: '这个平台暂不支持 Composio 托管授权，需要先在 Composio 控制台配置自定义认证。',
       unknownPlatform: '没有找到这个平台。',
@@ -226,6 +237,17 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       authPopupBlocked: 'Could not open the system browser automatically. Use the button below to continue.',
       openAuth: 'Open authorization page',
       connectFailed: 'Could not create an authorization link. Try again shortly.',
+      credentialTitle: 'Connect {name}',
+      credentialBody: 'This toolkit cannot redirect for authorization; enter its {field}.',
+      credentialPlaceholder: 'Paste the {label}',
+      credentialSubmit: 'Connect',
+      credentialConnecting: 'Connecting…',
+      credentialRequired: 'Enter the API key',
+      credentialRejected: 'The app rejected this API key. Check it and try again.',
+      credentialConnected: 'Connection created. The credential is checked on the first tool call.',
+      getApiKey: 'Get API key',
+      openPlatform: 'Open the app page',
+      manualAuthOpened: 'This toolkit needs authorization configured on its own page; it has been opened for you.',
       openAuthGuide: 'See the auth setup guide',
       managedAuthUnavailable: 'This toolkit needs custom authentication configured in Composio first.',
       unknownPlatform: 'Toolkit not found.',
@@ -317,6 +339,11 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
       connect_failed: 'connectFailed',
       link_failed: 'connectFailed',
       auth_config_failed: 'connectFailed',
+      credential_rejected: 'credentialRejected',
+      credentials_required: 'credentialRequired',
+      invalid_credentials: 'credentialRequired',
+      invalid_auth_config: 'credentialRejected',
+      no_api_key_scheme: 'credentialRejected',
       login_expired: 'oauthFailed',
       login_not_found: 'oauthFailed',
       login_cancelled: 'oauthFailed',
@@ -789,6 +816,97 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
   }
 
   /* ---------------------------------------------------------------- */
+  /* credential dialog (toolkits without managed auth)                 */
+  /* ---------------------------------------------------------------- */
+
+  function CredentialDialog({ prompt, lang, onCancel, onConnected }) {
+    const [value, setValue] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+    const field = prompt.field || {};
+    const label = field.label || 'API Key';
+    const link = prompt.hintUrl || prompt.appUrl;
+
+    const submit = async (event) => {
+      event.preventDefault();
+      if (busy || !value.trim()) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const result = await api('connectWithKey', {
+          slug: prompt.slug,
+          authConfigId: prompt.authConfigId,
+          value: value.trim(),
+        });
+        onConnected(result);
+      } catch (cause) {
+        setError(cause);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    return h('div', {
+      className: 'cmp-modal-backdrop',
+      role: 'presentation',
+      onMouseDown: (event) => {
+        if (event.target === event.currentTarget && !busy) onCancel();
+      },
+    },
+      h('form', {
+        className: 'cmp-modal',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-labelledby': 'cmp-credential-title',
+        onSubmit: submit,
+      },
+        h('div', { className: 'cmp-modal-head' },
+          h('div', { className: 'cmp-modal-icon' }, h(Icon, { name: 'lock', size: 18 })),
+          h('div', { className: 'cmp-modal-main' },
+            h('h2', { id: 'cmp-credential-title', className: 'cmp-modal-title' },
+              t(lang, 'credentialTitle', { name: prompt.toolkit && prompt.toolkit.name ? prompt.toolkit.name : prompt.slug })),
+            h('p', { className: 'cmp-modal-sub' },
+              t(lang, 'credentialBody', { field: label })))),
+        field.description ? h('p', { className: 'cmp-modal-desc' }, field.description) : null,
+        h('div', { className: 'cmp-field' },
+          h('label', { className: 'cmp-label', htmlFor: 'cmp-credential-input' }, label),
+          h('input', {
+            id: 'cmp-credential-input',
+            className: 'cmp-input',
+            type: field.secret === false ? 'text' : 'password',
+            value,
+            autoFocus: true,
+            autoComplete: 'off',
+            spellCheck: false,
+            placeholder: t(lang, 'credentialPlaceholder', { label }),
+            onChange: (event) => setValue(event.target.value),
+          })),
+        link ? h('button', {
+          className: 'cmp-textlink cmp-modal-link',
+          type: 'button',
+          onClick: () => {
+            void api('openExternal', { url: link }).catch(() => {
+              setError({ code: 'open_failed', message: t(lang, 'authPopupBlocked') });
+            });
+          },
+        }, t(lang, prompt.hintUrl ? 'getApiKey' : 'openPlatform'), ' ', h(Icon, { name: 'external', size: 11 })) : null,
+        error ? h('div', { className: 'cmp-modal-error' }, errorText(lang, error)) : null,
+        h('div', { className: 'cmp-modal-actions' },
+          h('button', {
+            className: 'cmp-btn',
+            type: 'button',
+            disabled: busy,
+            onClick: onCancel,
+          }, t(lang, 'cancel')),
+          h('button', {
+            className: 'cmp-btn cmp-btn-primary',
+            type: 'submit',
+            disabled: busy || !value.trim(),
+          }, busy ? h('span', { className: 'cmp-spin' }) : null,
+            busy ? t(lang, 'credentialConnecting') : t(lang, 'credentialSubmit')))));
+  }
+
+  /* ---------------------------------------------------------------- */
   /* advanced settings                                                 */
   /* ---------------------------------------------------------------- */
 
@@ -864,6 +982,7 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     const [pendingSlug, setPendingSlug] = useState('');
     const [waiting, setWaiting] = useState(null);
     const [authFallback, setAuthFallback] = useState(null);
+    const [credentialPrompt, setCredentialPrompt] = useState(null);
     const [disconnectId, setDisconnectId] = useState('');
     const [disconnecting, setDisconnecting] = useState('');
 
@@ -1023,6 +1142,11 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
           setNotice({ kind: 'info', text: t(UI_LANG, 'noAuthNotice') });
           return;
         }
+        if (value.requiresCredentials) {
+          setCredentialPrompt(Object.assign({}, value, { slug: app.slug }));
+          setNotice(null);
+          return;
+        }
         if (!value.redirectUrl) {
           const error = new Error(t(UI_LANG, 'connectFailed'));
           error.code = 'link_failed';
@@ -1039,12 +1163,24 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
         startPolling(app.slug);
       } catch (error) {
         const details = error && error.details;
+        const url = details && (details.hintUrl || details.appUrl || details.authGuideUrl);
+        if (error && error.code === 'no_managed_auth' && url) {
+          try {
+            await api('openExternal', { url });
+            setNotice({ kind: 'info', text: t(UI_LANG, 'manualAuthOpened'), href: url });
+          } catch {
+            setNotice({
+              kind: 'info',
+              text: t(UI_LANG, 'authPopupBlocked'),
+              href: url,
+            });
+          }
+          return;
+        }
         setNotice({
           kind: 'error',
           text: errorText(UI_LANG, error),
-          href: error && error.code === 'no_managed_auth'
-            ? (details && (details.authGuideUrl || details.appUrl))
-            : undefined,
+          href: error && error.code === 'no_managed_auth' ? url : undefined,
         });
       } finally {
         setPendingSlug('');
@@ -1217,6 +1353,24 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
             });
           },
         }, t(lang, 'openAuth'))) : null,
+      credentialPrompt ? h(CredentialDialog, {
+        prompt: credentialPrompt,
+        lang,
+        onCancel: () => setCredentialPrompt(null),
+        onConnected: async (result) => {
+          const slug = credentialPrompt.slug;
+          setCredentialPrompt(null);
+          await loadConnections();
+          if (result && result.status === 'ACTIVE') {
+            setNotice({ kind: 'success', text: t(lang, 'credentialConnected') });
+          } else {
+            waitingRef.current = slug;
+            setWaiting(slug);
+            setNotice({ kind: 'info', text: t(lang, 'waitingAuth') });
+            startPolling(slug);
+          }
+        },
+      }) : null,
       status.configured ? h(React.Fragment, null,
         sortedConnections.length > 0 || connLoading || connError ? h('section', { className: 'cmp-section' },
           h('div', { className: 'cmp-section-head' },
@@ -1428,6 +1582,18 @@ window.__ModuleLoader__.load({ id: 'dsh-composio', factory: (require) => {
     '.cmp-field{display:flex;flex-direction:column;gap:5px;max-width:520px}',
     '.cmp-label{font-size:12px;font-weight:600}',
     '.cmp-advanced-actions{display:flex;gap:8px;padding-top:2px}',
+    '.cmp-modal-backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(10,10,20,.5)}',
+    '.cmp-modal{width:min(460px,100%);max-height:calc(100vh - 48px);overflow:auto;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:0 24px 70px rgba(0,0,0,.35);padding:20px;display:flex;flex-direction:column;gap:12px}',
+    '.cmp-modal-head{display:flex;gap:11px;align-items:flex-start}',
+    '.cmp-modal-icon{width:34px;height:34px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(99,102,241,.14);color:#6366f1}',
+    '.cmp-modal-main{min-width:0}',
+    '.cmp-modal-title{margin:0 0 3px;font-size:16px;font-weight:650;letter-spacing:-.01em}',
+    '.cmp-modal-sub{margin:0;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-secondary)}',
+    '.cmp-modal-desc{margin:0;font-size:11.5px;line-height:1.6;color:var(--dsw-alias-label-secondary);padding:9px 11px;border-radius:8px;background:var(--dsw-alias-bg-layer-2)}',
+    '.cmp-modal .cmp-field{max-width:none}',
+    '.cmp-modal-link{margin-top:-2px}',
+    '.cmp-modal-error{margin-top:2px;padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 8%,transparent)}',
+    '.cmp-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}',
     '.cmp-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px;font-size:11px;color:var(--dsw-alias-label-secondary)}',
     '@media (max-width:720px){.cmp-header-link{display:none}.cmp-steps{grid-template-columns:1fr}.cmp-keyrow{flex-wrap:wrap}.cmp-keyrow .cmp-input{flex-basis:100%}.cmp-keyrow .cmp-btn{width:100%}.cmp-grid{grid-template-columns:1fr}.cmp-conn-meta{white-space:normal}.cmp-toolbar{flex-wrap:wrap}.cmp-search{flex-basis:100%}}',
   ].join('\n');

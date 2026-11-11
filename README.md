@@ -6,7 +6,7 @@
 
 插件分两层：
 
-1. **图形化接入**：设置 → Composio，用 OAuth 登录（推荐）或填写 Project / User API Key，搜索平台，点一下走 OAuth，查看/断开已有连接。
+1. **图形化接入**：设置 → Composio，用 OAuth 登录（推荐）或填写 Project / User API Key，搜索平台，点一下完成授权（OAuth 或 API Key 表单），查看/断开已有连接。
 2. **Agent 工具**：向 DSH 注册 5 个 Composio meta-tools（搜索工具、读取 schema、执行工具、查看连接、发起连接），agent 可以在对话里直接读写 Gmail、Slack、GitHub 等平台，无需你手动拼 API 请求。
 
 不使用「把 1,000+ 个平台工具全部注册给模型」的做法——那会占满上下文。插件采用与 Composio 官方 MCP 相同的 meta-tool 模式：先搜索、再读 schema、最后执行，模型只在需要时加载具体工具。
@@ -18,7 +18,7 @@
 | OAuth 登录（推荐） | 浏览器登录 Composio，自动获取并保存 User API Key，无需手动复制；页面会轮询到登录完成 |
 | API Key 接入 | 支持 Project API Key（`ak_...`）与 User API Key（`uak_...`），自动选择 `x-api-key` / `x-user-api-key`；校验通过才写入 DSH 凭据存储，并支持 `COMPOSIO_API_KEY` 环境变量回退 |
 | 平台目录 | 按使用量排序，关键词搜索、分页加载，展示分类、工具数量、Logo、连接状态 |
-| 一键 OAuth | 点击平台 → 查找/创建 Composio 托管授权配置 → 打开授权页 → 轮询连接状态 |
+| 一键连接 | 点击平台 → 有托管 OAuth 则打开授权页并轮询；只有 API Key 的平台弹出凭据表单；免鉴权平台直接连接 |
 | 连接管理 | 列出当前 user 的已连接账号，两步确认断开 |
 | Agent 工具 | 5 个工具：搜索、schema、执行、连接列表、发起连接 |
 | 中英双语 | 跟随 DSH 语言设置 |
@@ -92,9 +92,11 @@ OAuth 登录会在授权完成后自动保存。手动方式：在 **设置 → 
 
 - 已有 ACTIVE 连接 → 直接标记已连接；
 - 平台支持免鉴权（`no_auth`）→ 立即连接；
+- 平台只有 API Key / Bearer Token 等凭据（如 Resend）→ 弹出凭据表单，填写后直接创建连接；
 - 其余情况 → 自动查找/创建 Composio 托管 auth config，用系统默认浏览器打开 OAuth 授权页，完成后连接变为 ACTIVE。
 
 > OAuth 在浏览器里完成，所以目标平台本身需要可访问。Composio 托管 OAuth 默认使用其自带 client，不需要自己申请 Google / Slack 的 client_id。
+> 对于 Resend 这类只有 API Key 的平台，插件会自动创建一个 Composio 自定义 auth config，并要求填写平台 API Key；凭据只提交给 Composio 用于创建连接。
 
 ## Agent 工具
 
@@ -165,8 +167,9 @@ dsh-composio/
 ## 限制
 
 - Composio 后端是云服务，不能在本机完整自托管；自托管/BYOC 属于 Composio Enterprise 能力。本插件只把客户端和密钥放在本地。
-- 目前只走 Composio **托管 OAuth**；需要自带 OAuth app（自有 client_id / scopes）的平台，请先在 Composio Dashboard 建好 auth config，再回来连接。
+- 平台连接优先使用 Composio **托管 OAuth**；只有 API Key 的平台走自定义 auth config + 凭据表单。需要自带 OAuth app（自有 client_id / scopes）的平台，请先在 Composio Dashboard 建好 auth config，再回来连接。
 - 不支持 Organization API Key（`x-org-api-key`）；需要组织级权限时请用 OAuth 登录。
+- 部分平台的 API Key 不会被 Composio 在创建连接时校验；如果填错，会在首次调用该平台工具时返回鉴权错误。
 - 平台目录最多展示 Composio 当前项目可见的 toolkits；工具搜索结果受项目权限与平台可用性影响。
 - 没有实现 triggers / webhooks / 定时任务，只提供请求-响应式工具调用。
 - 执行结果会原样交给模型，超大输出会在 48,000 字符处截断。

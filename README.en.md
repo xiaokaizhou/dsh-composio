@@ -6,7 +6,7 @@
 
 The plugin has two halves:
 
-1. **Visual onboarding** — Settings → Composio: sign in with OAuth (recommended) or paste a Project / User API Key, search toolkits, click one to run OAuth, inspect or disconnect existing accounts.
+1. **Visual onboarding** — Settings → Composio: sign in with OAuth (recommended) or paste a Project / User API Key, search toolkits, click one to authorize (OAuth or an API-key form), inspect or disconnect existing accounts.
 2. **Agent tools** — five Composio meta-tools registered with DSH: search tools, read a tool schema, execute a tool, list connections, start a connection. The agent can read and write Gmail, Slack, GitHub and more from chat.
 
 It does **not** flood the model with 1,000+ platform tools. Like Composio's official MCP, it uses a meta-tool pattern: search first, load only the schema you need, then execute.
@@ -18,7 +18,7 @@ It does **not** flood the model with 1,000+ platform tools. Like Composio's offi
 | OAuth login (recommended) | Sign in to Composio in the browser; the User API Key is obtained and stored automatically, and the page polls until login completes |
 | API key setup | Supports Project API Keys (`ak_...`) and User API Keys (`uak_...`) with automatic `x-api-key` / `x-user-api-key` selection. A key is verified against Composio before storage; `COMPOSIO_API_KEY` is a read-only fallback |
 | Toolkit catalog | Sorted by usage, keyword search, pagination, categories, tool counts, logos, connection state |
-| One-click OAuth | Click a toolkit → find/create a Composio-managed auth config → open the authorization page → poll status |
+| One-click connect | Click a toolkit → managed OAuth opens the authorization page and polls; API-key-only platforms show a credential form; no-auth platforms connect immediately |
 | Connection management | List connected accounts for the current user; two-step disconnect |
 | Agent tools | Search, schema, execute, list connections, start connection |
 | i18n | Chinese / English, follows the DSH locale |
@@ -75,7 +75,7 @@ Open **Settings → Composio** and click **Sign in with OAuth**. The plugin crea
 
 ### Connect a toolkit
 
-Search for a toolkit and click its card. Existing active connections are detected; no-auth toolkits connect immediately; otherwise the system browser opens Composio's OAuth page and the UI polls until the connection becomes active.
+Search for a toolkit and click its card. Existing active connections are detected; no-auth toolkits connect immediately; API-key-only platforms (for example Resend) show a credential form and create the connection directly; otherwise the system browser opens Composio's OAuth page and the UI polls until the connection becomes active.
 
 OAuth stores the returned key automatically; a manually entered key is verified before storage. The key lives in DSH credentials under `dsh-composio/api-key` and never goes into `cordis.patch.yml`. The summary shows the source (OAuth login / entered manually / environment) and key type (Project / User). Advanced settings let you change `user_id` (default `dsh-user`) and the API base URL.
 
@@ -133,8 +133,9 @@ dsh-composio/
 ## Limitations
 
 - Composio's backend is a cloud service; full local self-hosting is not available (self-host/BYOC is an Enterprise capability). Only the client and key stay local.
-- Only Composio **managed OAuth** is automated. For platforms that need your own OAuth app, create the auth config in Composio first.
+- Composio **managed OAuth** is preferred. API-key-only platforms use a custom auth config plus a credential form. For platforms that need your own OAuth app, create the auth config in Composio first.
 - Organization API Keys (`x-org-api-key`) are not supported; use OAuth login for organization-level access.
+- Some API-key platforms are not validated when the connection is created; an invalid credential fails on the first tool call.
 - No triggers, webhooks, or scheduled runs yet; tools are request/response only.
 - Tool output is truncated at 48,000 characters before being returned to the model.
 
