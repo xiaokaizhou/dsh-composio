@@ -1,0 +1,66 @@
+{
+  "name": "dsh-composio",
+  "version": "0.2.0",
+  "description": "Connect Gmail, Slack, GitHub, Notion and 1,000+ apps to DSH through Composio — settings UI plus agent tools.",
+  "author": "xiaokaizhou",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiaokaizhou/dsh-composio.git"
+  },
+  "homepage": "https://github.com/xiaokaizhou/dsh-composio#readme",
+  "bugs": {
+    "url": "https://github.com/xiaokaizhou/dsh-composio/issues"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/en.json": "./locale/en.json",
+    "./locale/zh.json": "./locale/zh.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale",
+    "icon.svg",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "composio",
+    "integration",
+    "oauth",
+    "agent-tools",
+    "gmail",
+    "slack",
+    "github"
+  ],
+  "scripts": {
+    "check": "node --check index.js && node --check client.js"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  }
+}

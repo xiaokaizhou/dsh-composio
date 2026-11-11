@@ -1,0 +1,4 @@
+- insert:
+    - id: composio
+      name: dsh-composio
+      config: {}
